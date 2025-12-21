@@ -431,7 +431,6 @@ function createMobileEntryCard(entry) {
     } else if (entry.user_id === currentUser.id) {
         actionButtons = `
             <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
         `;
     } else {
         actionButtons = '<span class="no-delete">-</span>';
@@ -534,7 +533,6 @@ function createUnifiedTable(entries) {
         } else if (entry.user_id === currentUser.id) {
             actionButtons = `
                 <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
             `;
         } else {
             actionButtons = '<span class="no-delete">-</span>';
@@ -632,7 +630,6 @@ function createDesktopTable(entries) {
         } else if (entry.user_id === currentUser.id) {
             actionButtons = `
                 <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
             `;
         } else {
             actionButtons = '<span class="no-delete">-</span>';

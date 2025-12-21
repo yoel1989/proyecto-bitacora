@@ -515,7 +515,10 @@ function createUnifiedTable(entries) {
                 <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
             `;
         } else if (entry.user_id === currentUser.id) {
-            actionButtons = `<button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
+            actionButtons = `
+                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+            `;
         } else {
             actionButtons = '<span class="no-delete">-</span>';
         }
@@ -609,7 +612,10 @@ function createDesktopTable(entries) {
                 <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
             `;
         } else if (entry.user_id === currentUser.id) {
-            actionButtons = `<button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
+            actionButtons = `
+                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+            `;
         } else {
             actionButtons = '<span class="no-delete">-</span>';
         }

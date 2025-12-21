@@ -361,6 +361,7 @@ function displayEntries(entries) {
     }
 
     // Detectar si es móvil y mostrar el formato apropiado
+    console.log('Ancho de ventana:', window.innerWidth, 'Modo:', window.innerWidth <= 768 ? 'móvil' : 'desktop');
     if (window.innerWidth <= 768) {
         // Versión móvil: cards con botones en columna
         entries.forEach(entry => {

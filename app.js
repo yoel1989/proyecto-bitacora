@@ -360,18 +360,9 @@ function updateEntriesCounter(entries) {
     }
 }
 
-    // Detectar si es móvil
-    const isMobile = window.innerWidth <= 600;
-    
-    if (isMobile) {
-        // VISTA MÓVIL - Tabla ajustada
-        const table = createMobileTable(entries);
-        entriesList.appendChild(table);
-    } else {
-        // VISTA DESKTOP - Tabla Excel normal
-        const table = createDesktopTable(entries);
-        entriesList.appendChild(table);
-    }
+    // UNA SOLA TABLA PARA TODO
+    const table = createUnifiedTable(entries);
+    entriesList.appendChild(table);
 }
 
 // Crear tarjeta móvil
@@ -462,26 +453,28 @@ function createMobileEntryCard(entry) {
     return card;
 }
 
-// Crear tabla móvil
-function createMobileTable(entries) {
+// Crear tabla unificada
+function createUnifiedTable(entries) {
     const table = document.createElement('table');
-    table.className = 'excel-table mobile-table';
+    table.className = 'excel-table';
     
-    // Header móvil (solo columnas importantes)
+    // Header
     const thead = document.createElement('thead');
     thead.innerHTML = `
         <tr>
-            <th>Fecha</th>
+            <th>Fecha y Hora</th>
             <th>Título</th>
             <th>Descripción</th>
+            <th>Ubicación</th>
             <th>Estado</th>
+            <th>Usuario</th>
             <th>Fotos</th>
             <th>Acciones</th>
         </tr>
     `;
     table.appendChild(thead);
     
-    // Body móvil
+    // Body
     const tbody = document.createElement('tbody');
     entries.forEach(entry => {
         const row = document.createElement('tr');
@@ -490,18 +483,18 @@ function createMobileTable(entries) {
         if (entry.fotos && entry.fotos.length > 0) {
             fotosHtml = `
                 <div class="fotos-container">
-                    ${entry.fotos.slice(0, 2).map(url => `
+                    ${entry.fotos.slice(0, 3).map(url => `
                         <img src="${url}" class="mini-photo" onclick="window.open('${url}', '_blank')" />
                     `).join('')}
-                    ${entry.fotos.length > 2 ? `
-                        <span class="more-photos" onclick="showAllPhotos('${entry.id}')">
-                            +${entry.fotos.length - 2}
+                    ${entry.fotos.length > 3 ? `
+                        <span class="more-photos" onclick="showAllPhotos('${entry.id}')" title="Ver todas las fotos">
+                            +${entry.fotos.length - 3}
                         </span>
                     ` : ''}
                 </div>
             `;
         } else {
-            fotosHtml = '<span class="no-photos">-</span>';
+            fotosHtml = '<span class="no-photos">Sin fotos</span>';
         }
         
         // Botones de acción según rol
@@ -515,27 +508,33 @@ function createMobileTable(entries) {
         } else if (entry.user_id === currentUser.id) {
             actionButtons = `<button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
         } else {
-            actionButtons = '<span>-</span>';
+            actionButtons = '<span class="no-delete">-</span>';
         }
         
-        // Formatear fecha (solo fecha en móvil)
+        // Formatear fecha
         const fechaUsar = entry.fecha_hora || entry.fecha;
         let fechaMostrar;
+        let horaFormateada = '';
         
         if (fechaUsar.includes('T')) {
-            const [datePart] = fechaUsar.split('T');
+            const [datePart, timePart] = fechaUsar.split('T');
             const [year, month, day] = datePart.split('-');
-            fechaMostrar = `${day}/${month}/${year}`;
+            const [hours, minutes] = timePart.split(':');
+            fechaMostrar = new Date(year, month - 1, day, hours, minutes);
+            horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
         } else {
-            const [year, month, day] = fechaUsar.split('-');
-            fechaMostrar = `${day}/${month}/${year}`;
+            fechaMostrar = new Date(fechaUsar + 'T00:00:00');
+            horaFormateada = '00:00';
         }
+        const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
         
         row.innerHTML = `
-            <td>${fechaMostrar}</td>
-            <td><strong>${entry.titulo}</strong></td>
-            <td>${(entry.descripcion || '').substring(0, 50)}${entry.descripcion && entry.descripcion.length > 50 ? '...' : ''}</td>
+            <td>${fechaFormateada}</td>
+            <td>${entry.titulo}</td>
+            <td>${entry.descripcion || ''}</td>
+            <td>${entry.ubicacion || ''}</td>
             <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
+            <td>${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
             <td>${fotosHtml}</td>
             <td>${actionButtons}</td>
         `;

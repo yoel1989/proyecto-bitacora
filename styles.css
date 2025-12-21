@@ -951,91 +951,58 @@ header {
         white-space: nowrap;
     }
     
-    /* SOLUCIÓN DEFINITIVA MÓVIL - TABLA SEPARADA */
-    @media (max-width: 600px) {
-        .desktop-table {
-            display: none;
-        }
-        
-        .mobile-table {
-            display: table;
-            width: 100%;
-            border-collapse: collapse;
+    /* Tabla responsiva simple para todos */
+    @media (max-width: 768px) {
+        .excel-table {
+            display: block;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            font-size: 0.75rem;
+            min-width: 600px;
+            border: 1px solid #e0e0e0;
             border-radius: 8px;
-            overflow: hidden;
-            font-size: 0.8rem;
         }
         
-        .mobile-table th,
-        .mobile-table td {
+        .excel-table th,
+        .excel-table td {
             padding: 8px 4px;
             font-size: 0.75rem;
-            text-align: left;
-            vertical-align: top;
             line-height: 1.2;
-            border: 1px solid #e8ecf1;
         }
-        
-        .mobile-table th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            font-weight: 600;
-            font-size: 0.7rem;
-            padding: 10px 4px;
-        }
-        
-        .mobile-table th:nth-child(1) { width: 12%; }
-        .mobile-table th:nth-child(2) { width: 22%; }
-        .mobile-table th:nth-child(3) { width: 35%; }
-        .mobile-table th:nth-child(4) { width: 10%; }
-        .mobile-table th:nth-child(5) { width: 11%; }
-        .mobile-table th:nth-child(6) { width: 10%; }
         
         .mini-photo {
-            width: 20px;
-            height: 20px;
-            margin-right: 1px;
+            width: 25px;
+            height: 25px;
         }
         
         .edit-btn, .delete-btn {
-            padding: 3px 6px;
+            padding: 4px 6px;
             font-size: 0.7rem;
             margin: 1px;
         }
         
         .more-photos {
-            font-size: 0.6rem;
-            padding: 1px 3px;
+            font-size: 0.65rem;
+            padding: 2px 4px;
         }
         
         .entry-state {
-            font-size: 0.65rem;
-            padding: 1px 4px;
+            font-size: 0.7rem;
+            padding: 2px 5px;
         }
         
         .entries-list {
-            overflow-x: auto;
             width: 100%;
+            overflow-x: auto;
         }
         
         .entries-section {
-            padding: 0.5rem;
-            margin-bottom: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
         }
         
         main {
-            padding: 0.5rem;
-        }
-    }
-    
-    /* Desktop normal */
-    @media (min-width: 601px) {
-        .mobile-table {
-            display: none;
-        }
-        
-        .desktop-table {
-            display: table;
+            padding: 1rem;
         }
     }
         

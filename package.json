@@ -1,0 +1,13 @@
+{
+  "name": "bitacora-obra",
+  "version": "1.0.0",
+  "description": "Bitácora de obra con múltiples usuarios y fotos",
+  "main": "index.html",
+  "scripts": {
+    "start": "live-server --port=3000"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}

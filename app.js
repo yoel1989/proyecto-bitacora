@@ -90,32 +90,27 @@ function showForm() {
         fechaInput.value = localDateTime;
     }
     
-    // Hacer scroll con fallback para móvil
-    requestAnimationFrame(() => {
-        try {
-            // Intentar scrollIntoView primero
+    // Scroll forzado con múltiples métodos
+    setTimeout(() => {
+        // Método 1: scrollTop directo
+        document.documentElement.scrollTop = formSection.offsetTop - 10;
+        document.body.scrollTop = formSection.offsetTop - 10;
+        
+        // Método 2: scrollTo con smooth behavior
+        window.scrollTo({
+            top: formSection.offsetTop - 10,
+            behavior: 'smooth'
+        });
+        
+        // Método 3: scrollIntoView como backup
+        setTimeout(() => {
             formSection.scrollIntoView({ 
                 behavior: 'smooth', 
                 block: 'start',
                 inline: 'nearest'
             });
-        } catch (error) {
-            // Fallback para navegadores problemáticos
-            console.log('Usando fallback de scroll para móvil');
-            window.scrollTo(0, formSection.offsetTop - 20);
-        }
-        
-        // Segundo fallback después de un pequeño delay
-        setTimeout(() => {
-            const rect = formSection.getBoundingClientRect();
-            if (rect.top < 0 || rect.bottom > window.innerHeight) {
-                window.scrollTo({
-                    top: window.pageYOffset + rect.top - 20,
-                    behavior: 'smooth'
-                });
-            }
-        }, 100);
-    });
+        }, 50);
+    }, 100);
 }
 
 function hideForm() {

@@ -434,10 +434,16 @@ function createMobileEntryCard(entry) {
             <span class="entry-state state-${entry.estado}">${entry.estado}</span>
         </div>
         
-        <div class="mobile-entry-title">${entry.titulo}</div>
+        <div class="mobile-entry-row">
+            <div class="mobile-entry-label">Título:</div>
+            <div class="mobile-entry-content">${entry.titulo}</div>
+        </div>
         
         ${entry.descripcion ? `
-            <div class="mobile-entry-description">${entry.descripcion}</div>
+            <div class="mobile-entry-row">
+                <div class="mobile-entry-label">Descripción:</div>
+                <div class="mobile-entry-content">${entry.descripcion}</div>
+            </div>
         ` : ''}
         
         ${entry.ubicacion ? `

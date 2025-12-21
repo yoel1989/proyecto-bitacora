@@ -370,6 +370,7 @@ function displayEntries(entries) {
         });
     } else {
         // Versión desktop: tabla normal
+        console.log('Usando createDesktopTable para desktop');
         const table = createDesktopTable(entries);
         entriesList.appendChild(table);
     }
@@ -562,6 +563,7 @@ function createUnifiedTable(entries) {
 
 // Crear tabla desktop
 function createDesktopTable(entries) {
+    console.log('Creando tabla desktop con', entries.length, 'entradas');
     const table = document.createElement('table');
     table.className = 'excel-table desktop-table';
     

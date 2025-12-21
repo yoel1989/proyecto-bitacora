@@ -675,7 +675,7 @@ function showAllPhotos(entryId) {
     // Primero buscar en cards móviles
     const mobileCards = document.querySelectorAll('.mobile-entry-card');
     for (let card of mobileCards) {
-        const editBtn = card.querySelector('[onclick*="editEntry(']');
+        const editBtn = card.querySelector('[onclick*="editEntry("]');
         if (editBtn && editBtn.getAttribute('onclick').includes(`editEntry(${entryId})`)) {
             // Buscar las fotos en la variable global allEntries
             const entry = allEntries.find(e => e.id == entryId);

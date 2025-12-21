@@ -996,19 +996,12 @@ main {
       border-radius: 8px;
     }
 
-    /* Botones perfectos para móvil */
+    /* Solo botones más pequeños - resto normal */
     .edit-btn,
     .delete-btn {
-      padding: 1px 3px;
+      padding: 2px 4px;
       font-size: 0.7rem;
-      margin: 0 1px;
-      min-width: 24px;
-      height: 18px;
-      line-height: 1.1;
-      width: auto;
-      display: inline-block;
-      text-align: center;
-      border-radius: 3px;
+      margin: 1px;
     }
 
     .more-photos {

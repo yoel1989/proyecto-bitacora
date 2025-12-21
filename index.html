@@ -35,47 +35,8 @@
             </header>
 
             <main>
-                <!-- Bitacora Entries -->
-                <section class="entries-section">
-                <div class="section-header">
-                    <div class="title-section">
-                        <h2>Entradas de Bitácora</h2>
-                        <div class="entries-counter" id="entriesCounter">
-                            <span class="counter-number">0</span>
-                            <span class="counter-text">entradas</span>
-                        </div>
-                    </div>
-                    <div class="header-buttons">
-                        <button id="manageUsersBtn" class="manage-users-btn" style="display: none;">👥 Gestionar Usuarios</button>
-                        <button id="newEntryBtn" class="new-entry-btn">+ Nueva Entrada</button>
-                    </div>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filter-row">
-                        <div class="filter-group">
-                            <input type="text" id="searchInput" placeholder="🔍 Buscar por título o descripción...">
-                        </div>
-                        <div class="filter-group">
-                            <select id="estadoFilter">
-                                <option value="">Todos los estados</option>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="en_progreso">En Progreso</option>
-                                <option value="completado">Completado</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <input type="date" id="fechaFilter">
-                        </div>
-                        <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
-                    </div>
-                </div>
-                    <div id="entriesList"></div>
-                </section>
-
-                 <!-- New Entry Form (Hidden by default) -->
-                 <section class="form-section" id="formSection" style="display: none;">
-                 <span id="formAnchor" style="position: absolute; top: -60px; left: 0;"></span>
+                <!-- New Entry Form (Hidden by default) -->
+                <section class="form-section" id="formSection" style="display: none;">
                     <div class="form-header">
                         <h2>Nueva Entrada</h2>
                         <button id="cancelFormBtn" class="cancel-btn">✕</button>
@@ -132,6 +93,44 @@
                         
                         <button type="submit">Guardar Entrada</button>
                     </form>
+                </section>
+
+                <!-- Bitacora Entries -->
+                <section class="entries-section">
+                <div class="section-header">
+                    <div class="title-section">
+                        <h2>Entradas de Bitácora</h2>
+                        <div class="entries-counter" id="entriesCounter">
+                            <span class="counter-number">0</span>
+                            <span class="counter-text">entradas</span>
+                        </div>
+                    </div>
+                    <div class="header-buttons">
+                        <button id="manageUsersBtn" class="manage-users-btn" style="display: none;">👥 Gestionar Usuarios</button>
+                        <button id="newEntryBtn" class="new-entry-btn">+ Nueva Entrada</button>
+                    </div>
+                </div>
+                
+                <div class="filters-section">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <input type="text" id="searchInput" placeholder="🔍 Buscar por título o descripción...">
+                        </div>
+                        <div class="filter-group">
+                            <select id="estadoFilter">
+                                <option value="">Todos los estados</option>
+                                <option value="pendiente">Pendiente</option>
+                                <option value="en_progreso">En Progreso</option>
+                                <option value="completado">Completado</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <input type="date" id="fechaFilter">
+                        </div>
+                        <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
+                    </div>
+                </div>
+                    <div id="entriesList"></div>
                 </section>
             </main>
         </div>

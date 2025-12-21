@@ -74,9 +74,13 @@ async function getUserProfile() {
 // Funciones del formulario
 function showForm() {
     const formSection = document.getElementById('formSection');
+    const entriesSection = document.querySelector('.entries-section');
+    
+    // Ocultar entradas y mostrar formulario
+    entriesSection.style.display = 'none';
     formSection.style.display = 'block';
     
-    // Establecer fecha y hora actual primero
+    // Establecer fecha y hora actual
     const fechaInput = document.getElementById('fecha');
     if (fechaInput && !fechaInput.value) {
         const now = new Date();
@@ -90,35 +94,18 @@ function showForm() {
         fechaInput.value = localDateTime;
     }
     
-    // Solución definitiva - hash sin restauración
-    setTimeout(() => {
-        // Forzar hash al ancla del formulario y mantenerlo
-        window.location.hash = '#formAnchor';
-        
-        // Forcer scroll adicional para asegurar posición
-        setTimeout(() => {
-            const anchor = document.getElementById('formAnchor');
-            if (anchor) {
-                anchor.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }
-        }, 50);
-        
-        // Scroll forzado como backup definitivo
-        setTimeout(() => {
-            const formPosition = formSection.offsetTop - 30;
-            window.scrollTo(0, formPosition);
-        }, 100);
-    }, 50);
+    // Simple scroll al inicio del main
+    window.scrollTo(0, 0);
 }
 
 function hideForm() {
     const formSection = document.getElementById('formSection');
+    const entriesSection = document.querySelector('.entries-section');
     const form = document.getElementById('bitacoraForm');
     
+    // Mostrar entradas y ocultar formulario
     formSection.style.display = 'none';
+    entriesSection.style.display = 'block';
     form.reset();
     delete form.dataset.editId;
     delete form.dataset.existingPhotos;

@@ -951,30 +951,18 @@ header {
         white-space: nowrap;
     }
     
-    /* Tabla responsiva simple para todos */
+    /* Solo ajustar botones en móvil */
     @media (max-width: 768px) {
         .excel-table {
             display: block;
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-            font-size: 0.75rem;
-            min-width: 600px;
+            min-width: 700px;
             border: 1px solid #e0e0e0;
             border-radius: 8px;
         }
         
-        .excel-table th,
-        .excel-table td {
-            padding: 8px 4px;
-            font-size: 0.75rem;
-            line-height: 1.2;
-        }
-        
-        .mini-photo {
-            width: 25px;
-            height: 25px;
-        }
-        
+        /* Solo botones más pequeños */
         .edit-btn, .delete-btn {
             padding: 2px 4px;
             font-size: 0.6rem;
@@ -985,27 +973,18 @@ header {
         }
         
         .more-photos {
-            font-size: 0.65rem;
-            padding: 2px 4px;
+            font-size: 0.6rem;
+            padding: 2px 3px;
         }
         
-        .entry-state {
-            font-size: 0.7rem;
-            padding: 2px 5px;
+        .mini-photo {
+            width: 30px;
+            height: 30px;
         }
         
         .entries-list {
             width: 100%;
             overflow-x: auto;
-        }
-        
-        .entries-section {
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        main {
-            padding: 1rem;
         }
     }
         

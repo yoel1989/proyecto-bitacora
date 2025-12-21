@@ -144,12 +144,10 @@ main {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
-  width: calc(100% - 0px);
-  max-width: none;
+  width: 100%;
   box-sizing: border-box;
   position: relative;
-  margin-left: 0;
-  margin-right: 0;
+  max-width: 100%;
 }
 
 .form-group {
@@ -1239,33 +1237,7 @@ main {
 
 
 
-.excel-table td:nth-child(2):before {
-  content: "Título:";
-}
-.excel-table td:nth-child(3):before {
-  content: "Descripción:";
-}
-.excel-table td:nth-child(3) {
-  padding-left: 85px;
-  white-space: normal;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-}
-.excel-table td:nth-child(3):before {
-  left: 0;
-  width: 75px;
-}
-.excel-table td:nth-child(4):before {
-  content: "Ubicación:";
-}
-.excel-table td:nth-child(5):before {
-  content: "Estado:";
-}
-.excel-table td:nth-child(6):before {
-  content: "Usuario:";
-}
-.excel-table td:nth-child(7):before {
-  content: "Fotos:";
+
 }
 
 

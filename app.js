@@ -90,28 +90,28 @@ function showForm() {
         fechaInput.value = localDateTime;
     }
     
-    // Solución definitiva con hash navigation
+    // Solución definitiva - hash sin restauración
     setTimeout(() => {
-        // Guardar hash actual
-        const originalHash = window.location.hash;
-        
-        // Forzar hash al ancla del formulario
+        // Forzar hash al ancla del formulario y mantenerlo
         window.location.hash = '#formAnchor';
         
-        // Restaurar hash original después de un delay
+        // Forcer scroll adicional para asegurar posición
         setTimeout(() => {
-            window.location.hash = originalHash;
+            const anchor = document.getElementById('formAnchor');
+            if (anchor) {
+                anchor.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }, 50);
+        
+        // Scroll forzado como backup definitivo
+        setTimeout(() => {
+            const formPosition = formSection.offsetTop - 30;
+            window.scrollTo(0, formPosition);
         }, 100);
     }, 50);
-    
-    // Fallback adicional con scroll directo
-    setTimeout(() => {
-        const formSection = document.getElementById('formSection');
-        if (formSection) {
-            const scrollTarget = formSection.offsetTop - 50;
-            window.scrollTo(0, scrollTarget);
-        }
-    }, 150);
 }
 
 function hideForm() {

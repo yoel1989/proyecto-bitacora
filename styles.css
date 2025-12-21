@@ -896,7 +896,11 @@ header {
 /* Responsive mejorado */
 @media (max-width: 768px) {
     main {
-        padding: 0.75rem;
+        padding: 0.5rem;
+        max-width: 100%;
+        width: 100%;
+        overflow-x: hidden;
+        position: relative;
     }
     
     .form-section,
@@ -954,7 +958,10 @@ header {
         }
         
         .entries-list {
-            display: block !important;
+            clear: both;
+            overflow: hidden;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .mobile-entry-card {
@@ -965,9 +972,12 @@ header {
             margin-bottom: 1.5rem;
             padding: 1.25rem;
             width: 100%;
+            max-width: 100%;
             box-sizing: border-box;
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             position: relative;
+            overflow: hidden;
+            clear: both;
         }
         
         .mobile-entry-header {
@@ -1064,21 +1074,32 @@ header {
         }
         
         .mobile-actions {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1rem;
+            width: 100%;
+            margin-top: 0.75rem;
             padding-top: 0.75rem;
             border-top: 1px solid #f0f0f0;
+            box-sizing: border-box;
+        }
+        
+        .mobile-actions-container {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .mobile-action-btn {
-            padding: 0.5rem 1rem;
+            padding: 0.4rem 0.8rem;
             border: none;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             transition: all 0.2s;
             font-weight: 500;
+            min-width: auto;
+            white-space: nowrap;
+            flex: 1;
+            max-width: 120px;
         }
         
         .mobile-edit-btn {

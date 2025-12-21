@@ -421,11 +421,11 @@ function createMobileEntryCard(entry) {
     let actionButtons = '';
     if (currentUser.role === 'admin') {
         actionButtons = `
-            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
-            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
+            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
         `;
     } else if (entry.user_id === currentUser.id) {
-        actionButtons = `<button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>`;
+        actionButtons = `<button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
     }
     
     card.innerHTML = `
@@ -455,7 +455,9 @@ function createMobileEntryCard(entry) {
         ${fotosHtml}
         
         ${actionButtons ? `
-            <div class="mobile-actions">${actionButtons}</div>
+            <div class="mobile-actions">
+                <div class="mobile-actions-container">${actionButtons}</div>
+            </div>
         ` : ''}
     `;
     

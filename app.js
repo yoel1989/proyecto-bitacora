@@ -335,6 +335,18 @@ function filterAndDisplayEntries() {
     displayEntries(filteredEntries);
 }
 
+// Actualizar contador de entradas
+function updateEntriesCounter(entries) {
+    const counter = document.getElementById('entriesCounter');
+    if (counter) {
+        const count = entries ? entries.length : 0;
+        counter.innerHTML = `
+            <span class="counter-number">${count}</span>
+            <span class="counter-text">${count === 1 ? 'entrada' : 'entradas'}</span>
+        `;
+    }
+}
+
 // Mostrar entradas
 function displayEntries(entries) {
     const entriesList = document.getElementById('entriesList');
@@ -348,21 +360,18 @@ function displayEntries(entries) {
         return;
     }
 
-// Actualizar contador de entradas
-function updateEntriesCounter(entries) {
-    const counter = document.getElementById('entriesCounter');
-    if (counter) {
-        const count = entries ? entries.length : 0;
-        counter.innerHTML = `
-            <span class="counter-number">${count}</span>
-            <span class="counter-text">${count === 1 ? 'entrada' : 'entradas'}</span>
-        `;
+    // Detectar si es móvil y mostrar el formato apropiado
+    if (window.innerWidth <= 768) {
+        // Versión móvil: cards con botones en columna
+        entries.forEach(entry => {
+            const card = createMobileEntryCard(entry);
+            entriesList.appendChild(card);
+        });
+    } else {
+        // Versión desktop: tabla normal
+        const table = createDesktopTable(entries);
+        entriesList.appendChild(table);
     }
-}
-
-    // UNA SOLA TABLA PARA TODO
-    const table = createUnifiedTable(entries);
-    entriesList.appendChild(table);
 }
 
 // Crear tarjeta móvil
@@ -896,6 +905,15 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Event listener para resize
+let resizeTimeout;
+window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(() => {
+        filterAndDisplayEntries(); // Recargar las entradas con el formato apropiado
+    }, 250);
+});
 
 // Iniciar
 checkAuth();

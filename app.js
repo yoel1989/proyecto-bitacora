@@ -360,9 +360,18 @@ function updateEntriesCounter(entries) {
     }
 }
 
-    // VISTA UNIFICADA - Tabla responsiva simple
-    const table = createDesktopTable(entries);
-    entriesList.appendChild(table);
+    // Detectar si es móvil
+    const isMobile = window.innerWidth <= 600;
+    
+    if (isMobile) {
+        // VISTA MÓVIL - Tabla ajustada
+        const table = createMobileTable(entries);
+        entriesList.appendChild(table);
+    } else {
+        // VISTA DESKTOP - Tabla Excel normal
+        const table = createDesktopTable(entries);
+        entriesList.appendChild(table);
+    }
 }
 
 // Crear tarjeta móvil
@@ -453,10 +462,96 @@ function createMobileEntryCard(entry) {
     return card;
 }
 
+// Crear tabla móvil
+function createMobileTable(entries) {
+    const table = document.createElement('table');
+    table.className = 'excel-table mobile-table';
+    
+    // Header móvil (solo columnas importantes)
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>Fecha</th>
+            <th>Título</th>
+            <th>Descripción</th>
+            <th>Estado</th>
+            <th>Fotos</th>
+            <th>Acciones</th>
+        </tr>
+    `;
+    table.appendChild(thead);
+    
+    // Body móvil
+    const tbody = document.createElement('tbody');
+    entries.forEach(entry => {
+        const row = document.createElement('tr');
+        
+        let fotosHtml = '';
+        if (entry.fotos && entry.fotos.length > 0) {
+            fotosHtml = `
+                <div class="fotos-container">
+                    ${entry.fotos.slice(0, 2).map(url => `
+                        <img src="${url}" class="mini-photo" onclick="window.open('${url}', '_blank')" />
+                    `).join('')}
+                    ${entry.fotos.length > 2 ? `
+                        <span class="more-photos" onclick="showAllPhotos('${entry.id}')">
+                            +${entry.fotos.length - 2}
+                        </span>
+                    ` : ''}
+                </div>
+            `;
+        } else {
+            fotosHtml = '<span class="no-photos">-</span>';
+        }
+        
+        // Botones de acción según rol
+        let actionButtons = '';
+        
+        if (currentUser.role === 'admin') {
+            actionButtons = `
+                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+            `;
+        } else if (entry.user_id === currentUser.id) {
+            actionButtons = `<button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
+        } else {
+            actionButtons = '<span>-</span>';
+        }
+        
+        // Formatear fecha (solo fecha en móvil)
+        const fechaUsar = entry.fecha_hora || entry.fecha;
+        let fechaMostrar;
+        
+        if (fechaUsar.includes('T')) {
+            const [datePart] = fechaUsar.split('T');
+            const [year, month, day] = datePart.split('-');
+            fechaMostrar = `${day}/${month}/${year}`;
+        } else {
+            const [year, month, day] = fechaUsar.split('-');
+            fechaMostrar = `${day}/${month}/${year}`;
+        }
+        
+        row.innerHTML = `
+            <td>${fechaMostrar}</td>
+            <td><strong>${entry.titulo}</strong></td>
+            <td>${(entry.descripcion || '').substring(0, 50)}${entry.descripcion && entry.descripcion.length > 50 ? '...' : ''}</td>
+            <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
+            <td>${fotosHtml}</td>
+            <td>${actionButtons}</td>
+        `;
+        
+        row.dataset.fotos = JSON.stringify(entry.fotos || []);
+        tbody.appendChild(row);
+    });
+    table.appendChild(tbody);
+    
+    return table;
+}
+
 // Crear tabla desktop
 function createDesktopTable(entries) {
     const table = document.createElement('table');
-    table.className = 'excel-table';
+    table.className = 'excel-table desktop-table';
     
     // Header
     const thead = document.createElement('thead');

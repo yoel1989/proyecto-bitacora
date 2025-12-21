@@ -90,27 +90,38 @@ function showForm() {
         fechaInput.value = localDateTime;
     }
     
-    // Scroll forzado con múltiples métodos
-    setTimeout(() => {
-        // Método 1: scrollTop directo
-        document.documentElement.scrollTop = formSection.offsetTop - 10;
-        document.body.scrollTop = formSection.offsetTop - 10;
+    // Método agresivo para móvil real
+    const scrollToForm = () => {
+        const formPosition = formSection.getBoundingClientRect().top;
+        const currentPosition = window.pageYOffset || document.documentElement.scrollTop;
+        const targetPosition = currentPosition + formPosition - 80; // Más espacio para header móvil
         
-        // Método 2: scrollTo con smooth behavior
-        window.scrollTo({
-            top: formSection.offsetTop - 10,
-            behavior: 'smooth'
-        });
+        // Scroll forzado para móvil
+        window.scrollTo(0, targetPosition);
+        document.documentElement.scrollTop = targetPosition;
+        document.body.scrollTop = targetPosition;
         
-        // Método 3: scrollIntoView como backup
+        // Forzar repaint
+        formSection.style.transform = 'translateY(1px)';
         setTimeout(() => {
-            formSection.scrollIntoView({ 
-                behavior: 'smooth', 
-                block: 'start',
-                inline: 'nearest'
-            });
-        }, 50);
-    }, 100);
+            formSection.style.transform = 'translateY(0)';
+        }, 10);
+        
+        // Enfocar primer campo como último recurso
+        const firstInput = formSection.querySelector('input');
+        if (firstInput) {
+            setTimeout(() => {
+                firstInput.focus();
+                firstInput.blur(); // Para no abrir teclado inmediatamente
+            }, 200);
+        }
+    };
+    
+    // Intentar scroll inmediatamente y después con delays
+    scrollToForm();
+    setTimeout(scrollToForm, 50);
+    setTimeout(scrollToForm, 150);
+    setTimeout(scrollToForm, 300);
 }
 
 function hideForm() {

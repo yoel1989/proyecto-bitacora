@@ -90,38 +90,28 @@ function showForm() {
         fechaInput.value = localDateTime;
     }
     
-    // Método agresivo para móvil real
-    const scrollToForm = () => {
-        const formPosition = formSection.getBoundingClientRect().top;
-        const currentPosition = window.pageYOffset || document.documentElement.scrollTop;
-        const targetPosition = currentPosition + formPosition - 80; // Más espacio para header móvil
+    // Solución definitiva con hash navigation
+    setTimeout(() => {
+        // Guardar hash actual
+        const originalHash = window.location.hash;
         
-        // Scroll forzado para móvil
-        window.scrollTo(0, targetPosition);
-        document.documentElement.scrollTop = targetPosition;
-        document.body.scrollTop = targetPosition;
+        // Forzar hash al ancla del formulario
+        window.location.hash = '#formAnchor';
         
-        // Forzar repaint
-        formSection.style.transform = 'translateY(1px)';
+        // Restaurar hash original después de un delay
         setTimeout(() => {
-            formSection.style.transform = 'translateY(0)';
-        }, 10);
-        
-        // Enfocar primer campo como último recurso
-        const firstInput = formSection.querySelector('input');
-        if (firstInput) {
-            setTimeout(() => {
-                firstInput.focus();
-                firstInput.blur(); // Para no abrir teclado inmediatamente
-            }, 200);
-        }
-    };
+            window.location.hash = originalHash;
+        }, 100);
+    }, 50);
     
-    // Intentar scroll inmediatamente y después con delays
-    scrollToForm();
-    setTimeout(scrollToForm, 50);
-    setTimeout(scrollToForm, 150);
-    setTimeout(scrollToForm, 300);
+    // Fallback adicional con scroll directo
+    setTimeout(() => {
+        const formSection = document.getElementById('formSection');
+        if (formSection) {
+            const scrollTarget = formSection.offsetTop - 50;
+            window.scrollTo(0, scrollTarget);
+        }
+    }, 150);
 }
 
 function hideForm() {

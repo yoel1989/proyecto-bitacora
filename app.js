@@ -938,26 +938,7 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Event listener para resize - solo si realmente cambia el tamaño
-let resizeTimeout;
-let lastWidth = window.innerWidth;
-let lastHeight = window.innerHeight;
 
-window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-        const currentWidth = window.innerWidth;
-        const currentHeight = window.innerHeight;
-        
-        // Solo recargar si realmente cambia el tamaño significativamente
-        if (Math.abs(currentWidth - lastWidth) > 50 || Math.abs(currentHeight - lastHeight) > 50) {
-            console.log('Resize real detectado:', lastWidth, '→', currentWidth);
-            filterAndDisplayEntries(); // Recargar las entradas con el formato apropiado
-            lastWidth = currentWidth;
-            lastHeight = currentHeight;
-        }
-    }, 250);
-});
 
 // Iniciar
 checkAuth();

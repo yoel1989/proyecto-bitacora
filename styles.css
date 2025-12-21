@@ -947,6 +947,19 @@ main {
     overflow-x: auto;
   }
 
+  /* Optimizar rendimiento en móvil */
+  .form-section {
+    backdrop-filter: none !important;
+    background: white !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  .entries-section {
+    backdrop-filter: none !important;
+    background: white !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+
   header {
     flex-direction: column;
     gap: 0.75rem;
@@ -1079,10 +1092,13 @@ main {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     position: relative;
     overflow: hidden;
     clear: both;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    will-change: transform;
   }
 
   .mobile-entry-header {
@@ -1359,6 +1375,9 @@ main {
     -moz-box-sizing: border-box !important;
     -webkit-appearance: none;
     appearance: none;
+    transition: border-color 0.2s ease !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
 
   .form-group input:focus,

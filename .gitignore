@@ -5,3 +5,11 @@ node_modules/
 .DS_Store
 dist/
 build/
+# Archivos con tokens o información sensible
+*token*
+*credentials*
+comando-*.txt
+*.bak
+*_backup.*
+temp-*
+*.tmp

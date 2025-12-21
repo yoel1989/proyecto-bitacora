@@ -1,0 +1,5 @@
+# EJECUTA ESTO EN LA TERMINAL - REEMPLAZA TU-TOKEN-AQUI
+git push https://yoel1989:TU-TOKEN-AQUI@github.com/yoel1989/proyecto-bitacora.git main
+
+# Ejemplo real (reemplaza TU-TOKEN-AQUI con tu token real):
+# git push https://yoel1989:ghp_1234567890abcdef@github.com/yoel1989/proyecto-bitacora.git main

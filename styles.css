@@ -231,12 +231,25 @@ main {
     backdrop-filter: blur(10px);
 }
 
-.filter-row {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-    flex-wrap: wrap;
-}
+    .filter-row {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+    
+    @media (max-width: 768px) {
+        .filter-row {
+            flex-direction: column;
+            gap: 0.75rem;
+            align-items: stretch;
+        }
+        
+        .filter-group {
+            width: 100%;
+            min-width: auto;
+        }
+    }
 
 .filter-group {
     flex: 1;
@@ -911,9 +924,9 @@ main {
         font-size: 0.95rem;
     }
     
+    /* Tabla responsiva para móvil */
     .excel-table {
         font-size: 0.7rem;
-        min-width: 700px;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
         overflow: hidden;
@@ -921,6 +934,52 @@ main {
         display: block;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+    }
+    
+    /* Alternativa: Cards en móvil (mejor UX) */
+    @media (max-width: 600px) {
+        .excel-table thead {
+            display: none;
+        }
+        
+        .excel-table tbody tr {
+            display: block;
+            background: white;
+            border: 1px solid #e0e6ed;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            white-space: normal;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .excel-table td {
+            display: block;
+            padding: 0.5rem 0;
+            border: none;
+            position: relative;
+            padding-left: 100px;
+        }
+        
+        .excel-table td:before {
+            content: attr(data-label);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+            color: #667eea;
+            width: 90px;
+        }
+        
+        /* Etiquetas para cards */
+        .excel-table td:nth-child(1):before { content: "Fecha:"; }
+        .excel-table td:nth-child(2):before { content: "Título:"; }
+        .excel-table td:nth-child(3):before { content: "Descripción:"; }
+        .excel-table td:nth-child(4):before { content: "Ubicación:"; }
+        .excel-table td:nth-child(5):before { content: "Estado:"; }
+        .excel-table td:nth-child(6):before { content: "Usuario:"; }
+        .excel-table td:nth-child(7):before { content: "Fotos:"; }
+        .excel-table td:nth-child(8):before { content: "Acciones:"; }
     }
     
     .excel-table th,
@@ -963,10 +1022,10 @@ main {
     }
     
     main {
-        padding: 0.25rem;
+        padding: 0.5rem;
         max-width: 100%;
         width: 100%;
-        overflow-x: hidden;
+        overflow-x: visible;
     }
     
     .form-section,
@@ -993,13 +1052,13 @@ main {
     /* Formulario optimizado para móvil */
     .form-section {
         position: relative;
-        left: 0;
-        right: 0;
-        width: calc(100% + 0.5rem);
-        max-width: calc(100% + 0.5rem);
-        margin: 0 -0.25rem;
-        padding: 1rem 1.25rem 2rem 1.25rem;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 1rem;
         box-sizing: border-box;
+        left: auto;
+        right: auto;
     }
     
     .form-header {
@@ -1025,8 +1084,9 @@ main {
     .form-group select {
         width: 100% !important;
         max-width: 100% !important;
-        padding: 0.75rem;
-        font-size: 0.9rem;
+        padding: 1rem;
+        font-size: 16px !important;
+        min-height: 44px;
         border: 2px solid #ddd;
         border-radius: 8px;
         box-sizing: border-box !important;
@@ -1055,6 +1115,8 @@ main {
         font-size: 1rem;
         border-radius: 8px;
         margin-top: 1rem;
+        min-height: 48px;
+        font-weight: 600;
     }
     
     .modal-content {

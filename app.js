@@ -1,9 +1,4 @@
-// Configuración de Supabase
-const { createClient } = supabase;
-const supabaseClient = createClient(
-    'https://mqxguprzpypcyyusvfrf.supabase.co',
-    'sb_publishable_VoPfjSjRMUNNKLXjoI335g_ZR3zcUdm'
-);
+// Supabase client está configurado en config.js
 
 let currentUser = null;
 let allEntries = [];

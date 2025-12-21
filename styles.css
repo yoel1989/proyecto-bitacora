@@ -150,6 +150,7 @@ main {
   box-sizing: border-box;
   position: relative;
   max-width: 100%;
+  scroll-margin-top: 20px;
 }
 
 .form-group {

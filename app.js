@@ -76,24 +76,45 @@ function showForm() {
     const formSection = document.getElementById('formSection');
     formSection.style.display = 'block';
     
-    // Esperar un frame para asegurar que el elemento está visible
+    // Establecer fecha y hora actual primero
+    const fechaInput = document.getElementById('fecha');
+    if (fechaInput && !fechaInput.value) {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        
+        const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+        fechaInput.value = localDateTime;
+    }
+    
+    // Hacer scroll con fallback para móvil
     requestAnimationFrame(() => {
-        // Establecer fecha y hora actual primero
-        const fechaInput = document.getElementById('fecha');
-        if (fechaInput && !fechaInput.value) {
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            
-            const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-            fechaInput.value = localDateTime;
+        try {
+            // Intentar scrollIntoView primero
+            formSection.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'start',
+                inline: 'nearest'
+            });
+        } catch (error) {
+            // Fallback para navegadores problemáticos
+            console.log('Usando fallback de scroll para móvil');
+            window.scrollTo(0, formSection.offsetTop - 20);
         }
         
-        // Luego hacer scroll
-        formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Segundo fallback después de un pequeño delay
+        setTimeout(() => {
+            const rect = formSection.getBoundingClientRect();
+            if (rect.top < 0 || rect.bottom > window.innerHeight) {
+                window.scrollTo({
+                    top: window.pageYOffset + rect.top - 20,
+                    behavior: 'smooth'
+                });
+            }
+        }, 100);
     });
 }
 

@@ -951,49 +951,113 @@ header {
         white-space: nowrap;
     }
     
-    /* SOLUCIÓN SIMPLE MÓVIL - TABLA RESPONSIVA BÁSICA */
+    /* SOLUCIÓN DEFINITIVA MÓVIL - TABLA AJUSTADA */
     @media (max-width: 600px) {
         .excel-table {
             font-size: 0.8rem;
-            min-width: 100%;
             width: 100%;
             display: table;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+            border-collapse: collapse;
             border-radius: 8px;
+            overflow: hidden;
         }
         
         .excel-table th,
         .excel-table td {
-            padding: 8px 4px;
+            padding: 8px 6px;
             font-size: 0.75rem;
+            text-align: left;
+            vertical-align: top;
+            line-height: 1.2;
         }
         
-        .excel-table td:nth-child(3) {
-            max-width: 150px;
+        /* Ocultar columnas menos importantes en móvil */
+        .excel-table th:nth-child(4),
+        .excel-table td:nth-child(4) { /* Ubicación */
+            display: none;
+        }
+        
+        .excel-table th:nth-child(6),
+        .excel-table td:nth-child(6) { /* Usuario */
+            display: none;
+        }
+        
+        /* Ajustar anchos de columnas importantes */
+        .excel-table th:nth-child(1),
+        .excel-table td:nth-child(1) { /* Fecha */
+            width: 15%;
+            min-width: 80px;
+        }
+        
+        .excel-table th:nth-child(2),
+        .excel-table td:nth-child(2) { /* Título */
+            width: 25%;
+            min-width: 100px;
+            font-weight: 600;
+        }
+        
+        .excel-table th:nth-child(3),
+        .excel-table td:nth-child(3) { /* Descripción */
+            width: 30%;
+            min-width: 120px;
             word-wrap: break-word;
             white-space: normal;
+            line-height: 1.3;
+        }
+        
+        .excel-table th:nth-child(5),
+        .excel-table td:nth-child(5) { /* Estado */
+            width: 10%;
+            min-width: 60px;
+        }
+        
+        .excel-table th:nth-child(7),
+        .excel-table td:nth-child(7) { /* Fotos */
+            width: 10%;
+            min-width: 50px;
+        }
+        
+        .excel-table th:nth-child(8),
+        .excel-table td:nth-child(8) { /* Acciones */
+            width: 10%;
+            min-width: 80px;
         }
         
         .mini-photo {
-            width: 30px;
-            height: 30px;
+            width: 25px;
+            height: 25px;
+            margin-right: 2px;
         }
         
         .edit-btn, .delete-btn {
-            padding: 3px 6px;
+            padding: 4px 8px;
             font-size: 0.75rem;
-            margin: 0 2px;
+            margin: 1px;
+            min-width: 30px;
+        }
+        
+        .more-photos {
+            font-size: 0.65rem;
+            padding: 2px 4px;
+        }
+        
+        .entry-state {
+            font-size: 0.7rem;
+            padding: 2px 6px;
         }
         
         .entries-list {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+            overflow-x: visible;
+            width: 100%;
         }
         
         .entries-section {
-            padding: 0.5rem;
-            margin-bottom: 0.5rem;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        main {
+            padding: 0.75rem;
         }
     }
         

@@ -962,14 +962,17 @@ header {
             border-radius: 8px;
         }
         
-        /* Solo botones más pequeños */
+        /* Solo botones más pequeños horizontalmente */
         .edit-btn, .delete-btn {
-            padding: 2px 4px;
+            padding: 2px 2px;
             font-size: 0.6rem;
             margin: 0;
-            min-width: 20px;
+            min-width: 16px;
             height: 20px;
             line-height: 1;
+            width: 16px;
+            display: inline-block;
+            text-align: center;
         }
         
         .more-photos {

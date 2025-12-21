@@ -359,8 +359,111 @@ function updateEntriesCounter(entries) {
         `;
     }
 }
+
+    // Detectar si es móvil
+    const isMobile = window.innerWidth <= 600;
     
-    // Crear tabla tipo Excel
+    if (isMobile) {
+        // VISTA MÓVIL - Tarjetas
+        entries.forEach(entry => {
+            const card = createMobileEntryCard(entry);
+            entriesList.appendChild(card);
+        });
+    } else {
+        // VISTA DESKTOP - Tabla Excel
+        const table = createDesktopTable(entries);
+        entriesList.appendChild(table);
+    }
+}
+
+// Crear tarjeta móvil
+function createMobileEntryCard(entry) {
+    const card = document.createElement('div');
+    card.className = 'mobile-entry-card';
+    
+    // Formatear fecha
+    const fechaUsar = entry.fecha_hora || entry.fecha;
+    let fechaMostrar;
+    let horaFormateada = '';
+    
+    if (fechaUsar.includes('T')) {
+        const [datePart, timePart] = fechaUsar.split('T');
+        const [year, month, day] = datePart.split('-');
+        const [hours, minutes] = timePart.split(':');
+        fechaMostrar = new Date(year, month - 1, day, hours, minutes);
+        horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+    } else {
+        fechaMostrar = new Date(fechaUsar + 'T00:00:00');
+        horaFormateada = '00:00';
+    }
+    const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
+    
+    // Generar HTML de fotos
+    let fotosHtml = '';
+    if (entry.fotos && entry.fotos.length > 0) {
+        fotosHtml = `
+            <div class="mobile-fotos-container">
+                ${entry.fotos.slice(0, 5).map(url => `
+                    <img src="${url}" class="mobile-foto" onclick="window.open('${url}', '_blank')" />
+                `).join('')}
+                ${entry.fotos.length > 5 ? `
+                    <span class="mobile-more-photos" onclick="showAllPhotos('${entry.id}')">
+                        +${entry.fotos.length - 5}
+                    </span>
+                ` : ''}
+            </div>
+        `;
+    } else {
+        fotosHtml = '<div class="no-fotos-mobile">Sin fotos</div>';
+    }
+    
+    // Generar botones de acción
+    let actionButtons = '';
+    if (currentUser.role === 'admin') {
+        actionButtons = `
+            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
+            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
+        `;
+    } else if (entry.user_id === currentUser.id) {
+        actionButtons = `<button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>`;
+    }
+    
+    card.innerHTML = `
+        <div class="mobile-entry-header">
+            <div class="mobile-entry-date">${fechaFormateada}</div>
+            <span class="entry-state state-${entry.estado}">${entry.estado}</span>
+        </div>
+        
+        <div class="mobile-entry-title">${entry.titulo}</div>
+        
+        ${entry.descripcion ? `
+            <div class="mobile-entry-description">${entry.descripcion}</div>
+        ` : ''}
+        
+        ${entry.ubicacion ? `
+            <div class="mobile-entry-row">
+                <div class="mobile-entry-label">Ubicación:</div>
+                <div class="mobile-entry-content">${entry.ubicacion}</div>
+            </div>
+        ` : ''}
+        
+        <div class="mobile-entry-row">
+            <div class="mobile-entry-label">Usuario:</div>
+            <div class="mobile-entry-content">${currentUser ? currentUser.email : 'Usuario desconocido'}</div>
+        </div>
+        
+        ${fotosHtml}
+        
+        ${actionButtons ? `
+            <div class="mobile-actions">${actionButtons}</div>
+        ` : ''}
+    `;
+    
+    return card;
+}
+
+// Crear tabla desktop
+function createDesktopTable(entries) {
     const table = document.createElement('table');
     table.className = 'excel-table';
     
@@ -407,59 +510,50 @@ function updateEntriesCounter(entries) {
         let actionButtons = '';
         
         if (currentUser.role === 'admin') {
-            // Admin puede eliminar y editar todas las entradas
             actionButtons = `
                 <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
                 <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
             `;
         } else if (entry.user_id === currentUser.id) {
-            // Contratista solo puede editar sus propias entradas
             actionButtons = `<button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
         } else {
             actionButtons = '<span class="no-delete">-</span>';
         }
         
-        // Usar la nueva columna fecha_hora si existe, sino la fecha original
-    const fechaUsar = entry.fecha_hora || entry.fecha;
-    
-    let fechaMostrar;
-    let horaFormateada = '';
-    
-    if (fechaUsar.includes('T')) {
-        // Es datetime-local: "2025-12-20T21:16"
-        const [datePart, timePart] = fechaUsar.split('T');
-        const [year, month, day] = datePart.split('-');
-        const [hours, minutes] = timePart.split(':');
+        // Formatear fecha
+        const fechaUsar = entry.fecha_hora || entry.fecha;
+        let fechaMostrar;
+        let horaFormateada = '';
         
-        // Crear fecha local
-        fechaMostrar = new Date(year, month - 1, day, hours, minutes);
-        horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-    } else {
-        // Es solo fecha: "2025-12-20"
-        fechaMostrar = new Date(fechaUsar + 'T00:00:00');
-        horaFormateada = '00:00';
-    }
-    
-    const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
-    
-    row.innerHTML = `
-            <td data-label="Fecha y Hora">${fechaFormateada}</td>
-            <td data-label="Título">${entry.titulo}</td>
-            <td data-label="Descripción">${entry.descripcion || ''}</td>
-            <td data-label="Ubicación">${entry.ubicacion || ''}</td>
-            <td data-label="Estado"><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
-            <td data-label="Usuario">${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
-            <td data-label="Fotos">${fotosHtml}</td>
-            <td data-label="Acciones">${actionButtons}</td>
+        if (fechaUsar.includes('T')) {
+            const [datePart, timePart] = fechaUsar.split('T');
+            const [year, month, day] = datePart.split('-');
+            const [hours, minutes] = timePart.split(':');
+            fechaMostrar = new Date(year, month - 1, day, hours, minutes);
+            horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+        } else {
+            fechaMostrar = new Date(fechaUsar + 'T00:00:00');
+            horaFormateada = '00:00';
+        }
+        const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
+        
+        row.innerHTML = `
+            <td>${fechaFormateada}</td>
+            <td>${entry.titulo}</td>
+            <td>${entry.descripcion || ''}</td>
+            <td>${entry.ubicacion || ''}</td>
+            <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
+            <td>${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
+            <td>${fotosHtml}</td>
+            <td>${actionButtons}</td>
         `;
-    
-    console.log(`Entry ID: ${entry.id}, Fecha_hora: ${entry.fecha_hora}, Fecha: ${entry.fecha}, Mostrando: ${fechaFormateada}`);
+        
         row.dataset.fotos = JSON.stringify(entry.fotos || []);
         tbody.appendChild(row);
     });
     table.appendChild(tbody);
     
-    entriesList.appendChild(table);
+    return table;
 }
 
 // Mostrar todas las fotos de una entrada

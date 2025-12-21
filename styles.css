@@ -1010,15 +1010,7 @@ main {
     min-height: 20px;
   }
 
-  .excel-table td:before {
-    content: attr(data-label);
-    position: absolute;
-    left: 0;
-    font-weight: bold;
-    color: #667eea;
-    width: 75px;
-    font-size: 0.9rem;
-  }
+
 
   /* Solo ajustar botones en móvil */
   @media (max-width: 768px) {
@@ -1246,10 +1238,7 @@ main {
 
 
 
-/* Etiquetas para cards */
-.excel-table td:nth-child(1):before {
-  content: "Fecha:";
-}
+
 .excel-table td:nth-child(2):before {
   content: "Título:";
 }

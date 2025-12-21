@@ -360,20 +360,9 @@ function updateEntriesCounter(entries) {
     }
 }
 
-    // Detectar si es móvil
-    const isMobile = window.innerWidth <= 600;
-    
-    if (isMobile) {
-        // VISTA MÓVIL - Tarjetas
-        entries.forEach(entry => {
-            const card = createMobileEntryCard(entry);
-            entriesList.appendChild(card);
-        });
-    } else {
-        // VISTA DESKTOP - Tabla Excel
-        const table = createDesktopTable(entries);
-        entriesList.appendChild(table);
-    }
+    // VISTA UNIFICADA - Tabla responsiva simple
+    const table = createDesktopTable(entries);
+    entriesList.appendChild(table);
 }
 
 // Crear tarjeta móvil

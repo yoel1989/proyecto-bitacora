@@ -669,24 +669,41 @@ function createDesktopTable(entries) {
 function showAllPhotos(entryId) {
     console.log('Buscando fotos para entryId:', entryId);
     
-    // Buscar la fila correcta
-    const rows = document.querySelectorAll('.excel-table tbody tr');
-    let targetRow = null;
+    let fotos = [];
+    let found = false;
     
-    for (let row of rows) {
-        const editBtn = row.querySelector('.edit-btn');
-        if (editBtn && editBtn.getAttribute('onclick') && editBtn.getAttribute('onclick').includes(entryId.toString())) {
-            targetRow = row;
-            break;
+    // Primero buscar en cards móviles
+    const mobileCards = document.querySelectorAll('.mobile-entry-card');
+    for (let card of mobileCards) {
+        const editBtn = card.querySelector('[onclick*="editEntry(']');
+        if (editBtn && editBtn.getAttribute('onclick').includes(`editEntry(${entryId})`)) {
+            // Buscar las fotos en la variable global allEntries
+            const entry = allEntries.find(e => e.id == entryId);
+            if (entry && entry.fotos) {
+                fotos = entry.fotos;
+                found = true;
+                break;
+            }
         }
     }
     
-    if (!targetRow) {
-        console.error('No se encontró la fila para entryId:', entryId);
-        return;
+    // Si no encuentra en móvil, buscar en tabla desktop
+    if (!found) {
+        const rows = document.querySelectorAll('.excel-table tbody tr');
+        for (let row of rows) {
+            const editBtn = row.querySelector('.edit-btn');
+            if (editBtn && editBtn.getAttribute('onclick') && editBtn.getAttribute('onclick').includes(entryId.toString())) {
+                fotos = JSON.parse(row.dataset.fotos || '[]');
+                found = true;
+                break;
+            }
+        }
     }
     
-    const fotos = JSON.parse(targetRow.dataset.fotos || '[]');
+    if (!found) {
+        console.error('No se encontró la entrada para entryId:', entryId);
+        return;
+    }
     console.log('Fotos encontradas:', fotos);
     
     if (fotos.length > 0) {

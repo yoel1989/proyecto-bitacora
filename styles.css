@@ -952,7 +952,93 @@ header {
         .excel-table {
             display: block;
             width: 100%;
+            overflow: visible;
         }
+        
+        .excel-table thead {
+            display: none;
+        }
+        
+        .excel-table tbody {
+            display: block;
+            overflow: visible;
+        }
+        
+        .excel-table tbody tr {
+            display: block;
+            background: white;
+            border: 1px solid #e0e6ed;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            padding: 1.25rem;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            white-space: normal;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            clear: both;
+            float: none;
+            position: relative;
+            overflow: visible;
+        }
+        
+        .excel-table td {
+            display: block;
+            padding: 0.75rem 0 0.75rem 90px;
+            border: none;
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            min-height: 20px;
+            clear: both;
+            float: none;
+            overflow: visible;
+        }
+        
+        .excel-table td:before {
+            content: attr(data-label);
+            position: absolute;
+            left: 0;
+            top: 0.75rem;
+            font-weight: bold;
+            color: #667eea;
+            width: 80px;
+            font-size: 0.9rem;
+        }
+        
+        /* Tratamiento especial para descripción larga */
+        .excel-table td:nth-child(3) {
+            white-space: normal;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            line-height: 1.4;
+        }
+        
+        /* Evitar superposición de elementos */
+        .fotos-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 0.25rem;
+        }
+        
+        .edit-btn, .delete-btn {
+            margin-right: 0.5rem;
+        }
+        
+        /* Limpiar completamente */
+        .excel-table tbody::after {
+            content: "";
+            display: table;
+            clear: both;
+        }
+        
+        .entries-list {
+            clear: both;
+            overflow: visible;
+        }
+    }
         
         .excel-table thead {
             display: none;

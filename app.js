@@ -443,14 +443,14 @@ function updateEntriesCounter(entries) {
     const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
     
     row.innerHTML = `
-            <td>${fechaFormateada}</td>
-            <td>${entry.titulo}</td>
-            <td>${entry.descripcion || ''}</td>
-            <td>${entry.ubicacion || ''}</td>
-            <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
-            <td>${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
-            <td>${fotosHtml}</td>
-            <td>${actionButtons}</td>
+            <td data-label="Fecha y Hora">${fechaFormateada}</td>
+            <td data-label="Título">${entry.titulo}</td>
+            <td data-label="Descripción">${entry.descripcion || ''}</td>
+            <td data-label="Ubicación">${entry.ubicacion || ''}</td>
+            <td data-label="Estado"><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
+            <td data-label="Usuario">${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
+            <td data-label="Fotos">${fotosHtml}</td>
+            <td data-label="Acciones">${actionButtons}</td>
         `;
     
     console.log(`Entry ID: ${entry.id}, Fecha_hora: ${entry.fecha_hora}, Fecha: ${entry.fecha}, Mostrando: ${fechaFormateada}`);

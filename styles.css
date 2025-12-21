@@ -1022,7 +1022,7 @@ main {
     }
     
     main {
-        padding: 0.5rem;
+        padding: 0.25rem;
         max-width: 100%;
         width: 100%;
         overflow-x: visible;
@@ -1030,8 +1030,8 @@ main {
     
     .form-section,
     .entries-section {
-        padding: 1rem;
-        margin-bottom: 1rem;
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
         width: 100%;
         box-sizing: border-box;
     }
@@ -1055,20 +1055,21 @@ main {
         width: 100%;
         max-width: 100%;
         margin: 0;
-        padding: 1rem;
+        padding: 0.75rem;
         box-sizing: border-box;
         left: auto;
         right: auto;
+        border-radius: 8px;
     }
     
     .form-header {
-        margin-bottom: 1.5rem;
-        padding-bottom: 1rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
         border-bottom: 2px solid #f0f0f0;
     }
     
     .form-group {
-        margin-bottom: 1.25rem;
+        margin-bottom: 1rem;
         width: 100%;
     }
     
@@ -1084,7 +1085,7 @@ main {
     .form-group select {
         width: 100% !important;
         max-width: 100% !important;
-        padding: 1rem;
+        padding: 0.875rem;
         font-size: 16px !important;
         min-height: 44px;
         border: 2px solid #ddd;
@@ -1111,10 +1112,10 @@ main {
     
     .form-section button {
         width: 100%;
-        padding: 1rem;
+        padding: 0.875rem;
         font-size: 1rem;
         border-radius: 8px;
-        margin-top: 1rem;
+        margin-top: 0.75rem;
         min-height: 48px;
         font-weight: 600;
     }

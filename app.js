@@ -429,7 +429,12 @@ function createMobileEntryCard(entry) {
             <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
         `;
     } else if (entry.user_id === currentUser.id) {
-        actionButtons = `<button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>`;
+        actionButtons = `
+            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+        `;
+    } else {
+        actionButtons = '<span class="no-delete">-</span>';
     }
     
     card.innerHTML = `

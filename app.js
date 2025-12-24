@@ -297,7 +297,14 @@ async function handleBitacoraSubmit(e) {
 async function loadBitacoraEntries() {
     const { data, error } = await supabaseClient
         .from('bitacora')
-        .select('*')
+        .select(`
+            *,
+            profiles!inner (
+                nombre,
+                email,
+                rol
+            )
+        `)
         .order('fecha', { ascending: false });
     
     if (error) {
@@ -463,7 +470,7 @@ function createMobileEntryCard(entry) {
         
         <div class="mobile-entry-row">
             <div class="mobile-entry-label">Usuario:</div>
-            <div class="mobile-entry-content">${currentUser ? currentUser.email : 'Usuario desconocido'}</div>
+            <div class="mobile-entry-content">${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</div>
         </div>
         
         ${fotosHtml}
@@ -561,7 +568,7 @@ function createUnifiedTable(entries) {
             <td>${entry.descripcion || ''}</td>
             <td>${entry.ubicacion || ''}</td>
             <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
-            <td>${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
+            <td>${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</td>
             <td>${fotosHtml}</td>
             <td>${actionButtons}</td>
         `;
@@ -658,7 +665,7 @@ function createDesktopTable(entries) {
             <td>${entry.descripcion || ''}</td>
             <td>${entry.ubicacion || ''}</td>
             <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
-            <td>${currentUser ? currentUser.email : 'Usuario desconocido'}</td>
+            <td>${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</td>
             <td>${fotosHtml}</td>
             <td>${actionButtons}</td>
         `;

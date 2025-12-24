@@ -299,7 +299,7 @@ async function loadBitacoraEntries() {
         .from('bitacora')
         .select(`
             *,
-            profiles!inner (
+            profiles (
                 nombre,
                 email,
                 rol

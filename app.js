@@ -56,21 +56,26 @@ async function handleLogout() {
 
 // Obtener perfil del usuario
 async function getUserProfile() {
+    if (!currentUser) return;
+    
     const { data, error } = await supabaseClient
         .from('profiles')
         .select('*')
         .eq('id', currentUser.id)
         .single();
     
-if (data) {
+    if (data) {
         currentUser.role = data.rol; // Guardar el rol
-        currentUser.nombre = data.nombre; // Guardar el nombre
-        document.getElementById('userName').textContent = data.email;
+        // Usar email del auth de Supabase como fuente principal
+        document.getElementById('userName').textContent = currentUser.email;
         document.getElementById('userRole').textContent = '(' + data.rol + ')';
+        console.log('👤 Usuario logueado:', currentUser.email, 'Rol:', data.rol);
     } else {
         currentUser.role = 'contratista'; // Rol por defecto
-        currentUser.nombre = currentUser.email; // Fallback al email
+        document.getElementById('userName').textContent = currentUser.email;
+        console.log('👤 Usuario sin perfil, usando email del auth:', currentUser.email);
     }
+}
 }
 
 // Funciones del formulario
@@ -329,31 +334,16 @@ async function loadBitacoraEntries() {
         });
         allEntries = data;
         
-        // Cargar perfiles de usuarios
-        const userIds = [...new Set(data.map(entry => entry.user_id))];
-        console.log('🔍 User IDs a buscar:', userIds);
-        
-        if (userIds.length > 0) {
-            const { data: profiles, error: profilesError } = await supabaseClient
-                .from('profiles')
-                .select('id, nombre, email')
-                .in('id', userIds);
-            
-            console.log('👤 Perfiles encontrados:', profiles);
-            if (profilesError) {
-                console.error('❌ Error cargando perfiles:', profilesError);
+        // Simplificar: usar el user_id directamente como referencia de email
+        allEntries = data.map(entry => ({
+            ...entry,
+            // Simplificar el perfil para evitar problemas de carga
+            profiles: {
+                email: entry.user_id // Usar el ID como referencia temporal
             }
-            
-            // Mapear perfiles a las entradas
-            allEntries = data.map(entry => {
-                const profile = profiles.find(p => p.id === entry.user_id);
-                console.log(`🔗 Entrada ${entry.id} (${entry.titulo}) - User ID: ${entry.user_id} - Profile:`, profile);
-                return {
-                    ...entry,
-                    profiles: profile || { email: null }
-                };
-            });
-        }
+        }));
+        
+        console.log('📋 Entradas procesadas con perfiles simplificados:', allEntries.length);
         
         filterAndDisplayEntries();
     }

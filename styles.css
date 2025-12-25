@@ -195,27 +195,11 @@ main {
   resize: vertical;
 }
 
-/* Inputs autoajustables para título y ubicación */
+/* Aplicar mismos estilos de textarea a título y ubicación */
 #titulo,
 #ubicacion {
-  min-height: 44px;
-  height: 44px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.4;
-}
-
-/* En móvil permitir wrap */
-@media (max-width: 768px) {
-  #titulo,
-  #ubicacion {
-    height: auto;
-    white-space: normal;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    overflow: visible;
-  }
+  height: 80px;
+  resize: vertical;
 }
 
 /* Para desktop mantener comportamiento normal */

@@ -195,16 +195,27 @@ main {
   resize: vertical;
 }
 
-/* Inputs autoajustables para título y ubicación - wrap normal */
+/* Inputs autoajustables para título y ubicación */
 #titulo,
 #ubicacion {
   min-height: 44px;
-  height: auto;
-  resize: none;
-  white-space: normal;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  height: 44px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   line-height: 1.4;
+}
+
+/* En móvil permitir wrap */
+@media (max-width: 768px) {
+  #titulo,
+  #ubicacion {
+    height: auto;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow: visible;
+  }
 }
 
 /* Para desktop mantener comportamiento normal */

@@ -76,7 +76,6 @@ async function getUserProfile() {
         console.log('👤 Usuario sin perfil, usando email del auth:', currentUser.email);
     }
 }
-}
 
 // Funciones del formulario
 function showForm() {

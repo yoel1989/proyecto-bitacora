@@ -153,6 +153,7 @@ main {
   scroll-margin-top: 20px;
   max-height: 80vh !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
 }
 
 .form-group {
@@ -197,7 +198,7 @@ main {
   resize: vertical;
 }
 
-/* Inputs autoajustables para título y ubicación */
+/* Inputs autoajustables para título y ubicación - solo ajuste vertical */
 #titulo,
 #ubicacion {
   min-height: 44px !important;
@@ -205,11 +206,14 @@ main {
   height: auto !important;
   resize: vertical !important;
   overflow-y: auto !important;
+  overflow-x: hidden !important;
   white-space: normal !important;
   word-wrap: break-word !important;
   word-break: break-word !important;
   line-height: 1.4 !important;
   padding: 0.75rem !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 /* Para desktop mantener comportamiento normal */
@@ -981,8 +985,9 @@ main {
   }
 
   .form-section {
-    max-height: 70vh;
-    overflow-y: auto;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
   }
 
   /* Optimizar rendimiento en móvil */

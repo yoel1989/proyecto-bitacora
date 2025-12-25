@@ -49,7 +49,7 @@
                         
                         <div class="form-group">
                             <label>Título:</label>
-                            <input type="text" id="titulo" required placeholder="Ingrese el título...">
+                            <textarea id="titulo" required placeholder="Ingrese el título..." rows="1"></textarea>
                         </div>
                         
                         <div class="form-group">
@@ -58,8 +58,32 @@
                         </div>
                         
                         <div class="form-group">
+                            <label>Hora Inicio:</label>
+                            <input type="time" id="horaInicio">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Hora Final:</label>
+                            <input type="time" id="horaFinal">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Tipo de Nota:</label>
+                            <select id="tipoNota">
+                                <option value="">Seleccionar tipo</option>
+                                <option value="avance">Avance</option>
+                                <option value="incidente">Incidente</option>
+                                <option value="observacion">Observación</option>
+                                <option value="reunion">Reunión</option>
+                                <option value="documento">Documento</option>
+                                <option value="fotografico">Registro Fotográfico</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
                             <label>Ubicación:</label>
-                            <input type="text" id="ubicacion" placeholder="Ingrese la ubicación...">
+                            <textarea id="ubicacion" placeholder="Ingrese la ubicación..." rows="1"></textarea>
                         </div>
                         
                         <div class="form-group">
@@ -72,12 +96,12 @@
                         </div>
                         
                         <div class="form-group">
-                            <label>Fotos:</label>
-                            <input type="file" id="fotos" multiple accept="image/*">
-                            <div id="photoPreview" class="photo-preview" style="display: none;">
-                                <h4>📸 Vista previa de fotos:</h4>
-                                <div id="photoPreviewGrid" class="photo-preview-grid"></div>
-                                <p class="photo-info">ℹ️ Las fotos seleccionadas se agregarán al guardar</p>
+                            <label>Archivos (Imágenes, PDF, Word, Excel):</label>
+                            <input type="file" id="fotos" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                            <div id="photoPreview" class="file-preview" style="display: none;">
+                                <h4>📎 Vista previa de archivos:</h4>
+                                <div id="photoPreviewGrid" class="file-preview-grid"></div>
+                                <p class="file-info">ℹ️ Los archivos seleccionados se agregarán al guardar</p>
                             </div>
                             <div id="updateWarning" class="update-warning" style="display: none;">
                                 <div class="checkbox-container">

@@ -68,7 +68,7 @@ async function getUserProfile() {
         currentUser.role = data.rol; // Guardar el rol
         // Usar email del auth de Supabase como fuente principal
         document.getElementById('userName').textContent = currentUser.email;
-        document.getElementById('userRole').textContent = '(' + data.rol + ')';
+        document.getElementById('userRole').textContent = '(' + getRoleDisplayName(data.rol) + ')';
         console.log('👤 Usuario logueado:', currentUser.email, 'Rol:', data.rol);
     } else {
         currentUser.role = 'contratista'; // Rol por defecto
@@ -150,89 +150,129 @@ async function handleBitacoraSubmit(e) {
     const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
     
     const fotoFiles = document.getElementById('fotos').files;
-    let fotoUrls = [];
+    let archivoUrls = [];
     
     if (editId) {
         // Estamos actualizando una entrada existente
-        const existingPhotos = JSON.parse(form.dataset.existingPhotos || '[]');
+        const existingArchivos = JSON.parse(form.dataset.existingPhotos || '[]');
         
-        // Verificar si hay fotos nuevas y si el checkbox está marcado
+        // Verificar si hay archivos nuevos y si el checkbox está marcado
         if (fotoFiles.length > 0 && keepPhotosCheckbox && !keepPhotosCheckbox.checked) {
-            // No se mantiene fotos existentes y se suben nuevas
-            console.log('⚠️ Advertencia: Las fotos existentes serán reemplazadas');
+            // No se mantiene archivos existentes y se suben nuevos
+            console.log('⚠️ Advertencia: Los archivos existentes serán reemplazados');
         } else if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
-            // Mantener fotos existentes y agregar nuevas si las hay
-            fotoUrls = [...existingPhotos];
-            console.log('ℹ️ Manteniendo fotos existentes:', existingPhotos.length, 'fotos');
+            // Mantener archivos existentes y agregar nuevos si los hay
+            archivoUrls = [...existingArchivos];
+            console.log('ℹ️ Manteniendo archivos existentes:', existingArchivos.length, 'archivos');
         } else if (fotoFiles.length === 0) {
-            // No hay fotos nuevas, mantener las existentes
-            fotoUrls = [...existingPhotos];
-            console.log('ℹ️ Sin fotos nuevas, manteniendo fotos existentes');
+            // No hay archivos nuevos, mantener los existentes
+            archivoUrls = [...existingArchivos];
+            console.log('ℹ️ Sin archivos nuevos, manteniendo archivos existentes');
         } else {
-            // Hay fotos nuevas y no se quiere mantener las existentes
-            fotoUrls = [];
-            console.log('⚠️ Fotos existentes eliminadas, solo nuevas fotos se guardarán');
+            // Hay archivos nuevos y no se quiere mantener los existentes
+            archivoUrls = [];
+            console.log('⚠️ Archivos existentes eliminados, solo nuevos archivos se guardarán');
         }
         
-        // Subir nuevas fotos si hay
+        // Subir nuevos archivos si hay
         if (fotoFiles.length > 0) {
-            const newFotoUrls = [];
+            const newArchivoUrls = [];
             for (let i = 0; i < fotoFiles.length; i++) {
                 const file = fotoFiles[i];
+                
+                // Validar tipo de archivo
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+                                  'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+                
+                if (!validTypes.includes(file.type) && !file.type.startsWith('image/')) {
+                    console.error('Tipo de archivo no permitido:', file.type);
+                    alert(`El archivo "${file.name}" no es un tipo permitido`);
+                    continue;
+                }
+                
                 // Limpiar el nombre del archivo para evitar caracteres problemáticos
                 const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const fileName = `${Date.now()}_${cleanFileName}`;
                 
                 const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                    .from('fotos-obra')
+                    .from('archivos-obra')
                     .upload(fileName, file, {
                         cacheControl: '3600',
-                        upsert: false
+                        upsert: false,
+                        contentType: file.type
                     });
                 
                 if (uploadError) {
-                    console.error('Error subiendo foto:', uploadError);
+                    console.error('Error subiendo archivo:', uploadError);
+                    alert(`Error al subir el archivo "${file.name}": ${uploadError.message}`);
                 } else {
                     const { data: urlData } = supabaseClient.storage
-                        .from('fotos-obra')
+                        .from('archivos-obra')
                         .getPublicUrl(fileName);
                     
-                    newFotoUrls.push(urlData.publicUrl);
+                    newArchivoUrls.push({
+                        url: urlData.publicUrl,
+                        name: file.name,
+                        type: file.type,
+                        size: file.size
+                    });
                 }
             }
             
             if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
-                // Agregar nuevas fotos a las existentes
-                fotoUrls = [...fotoUrls, ...newFotoUrls];
+                // Agregar nuevos archivos a los existentes
+                archivoUrls = [...archivoUrls, ...newArchivoUrls];
             } else {
-                // Reemplazar completamente con nuevas fotos
-                fotoUrls = newFotoUrls;
+                // Reemplazar completamente con nuevos archivos
+                archivoUrls = newArchivoUrls;
             }
         }
     } else {
-        // Es una nueva entrada, solo subir las fotos nuevas
+        // Es una nueva entrada, solo subir los archivos nuevos
         if (fotoFiles.length > 0) {
             for (let i = 0; i < fotoFiles.length; i++) {
                 const file = fotoFiles[i];
+                
+                // Validar tipo de archivo
+                const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+                                  'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+                
+                if (!validTypes.includes(file.type) && !file.type.startsWith('image/')) {
+                    console.error('Tipo de archivo no permitido:', file.type);
+                    alert(`El archivo "${file.name}" no es un tipo permitido`);
+                    continue;
+                }
+                
                 // Limpiar el nombre del archivo para evitar caracteres problemáticos
                 const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const fileName = `${Date.now()}_${cleanFileName}`;
                 
                 const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                    .from('fotos-obra')
+                    .from('archivos-obra')
                     .upload(fileName, file, {
                         cacheControl: '3600',
-                        upsert: false
+                        upsert: false,
+                        contentType: file.type
                     });
                 
                 if (uploadError) {
-                    console.error('Error subiendo foto:', uploadError);
+                    console.error('Error subiendo archivo:', uploadError);
+                    alert(`Error al subir el archivo "${file.name}": ${uploadError.message}`);
                 } else {
                     const { data: urlData } = supabaseClient.storage
-                        .from('fotos-obra')
+                        .from('archivos-obra')
                         .getPublicUrl(fileName);
                     
-                    fotoUrls.push(urlData.publicUrl);
+                    archivoUrls.push({
+                        url: urlData.publicUrl,
+                        name: file.name,
+                        type: file.type,
+                        size: file.size
+                    });
                 }
             }
         }
@@ -247,22 +287,33 @@ const fechaInput = document.getElementById('fecha').value;
         return;
     }
     
-    // Guardar fecha completa con hora
+    // Guardar fecha completa con hora - convertir a ISO string para mantener zona horaria
     console.log('🕒 Fecha local original:', fechaInput);
-    console.log('🌐 Intentando guardar directamente el datetime-local:', fechaInput);
+    console.log('📍 Zona horaria actual:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    
+    // Generar folio consecutivo
+    const folio = await generarFolioConsecutivo();
+    
+    // Guardar directamente el datetime-local sin conversión UTC
+    console.log('🕒 Fecha local original:', fechaInput);
+    console.log('🔢 Folio generado:', folio);
     
     const formData = {
+        folio: folio, // Agregar folio
         user_id: currentUser.id,
-        fecha: fechaInput, // Intentar guardar directamente el datetime-local
+        fecha: fechaInput, // Guardar directamente como datetime-local
         titulo: document.getElementById('titulo').value,
         descripcion: document.getElementById('descripcion').value,
+        hora_inicio: document.getElementById('horaInicio').value,
+        hora_final: document.getElementById('horaFinal').value,
+        tipo_nota: document.getElementById('tipoNota').value,
         ubicacion: document.getElementById('ubicacion').value,
         estado: document.getElementById('estado').value,
-        fotos: fotoUrls
+        archivos: archivoUrls
     };
     
 console.log('FormData a guardar:', formData);
-    console.log('Fotos finales:', fotoUrls.length, 'fotos');
+    console.log('Archivos finales:', archivoUrls.length, 'archivos');
     
     let data, error;
     
@@ -446,34 +497,53 @@ function createMobileEntryCard(entry) {
     // Formatear fecha con zona horaria local
     const fechaFormateada = formatearFechaLocal(entry.fecha_hora || entry.fecha);
     
-    // Crear fotos HTML para móvil
-    let fotosHtml = '';
-    if (entry.fotos && entry.fotos.length > 0) {
-        fotosHtml = `
-            <div class="mobile-fotos-container">
-                ${entry.fotos.slice(0, 5).map(url => `
-                    <img src="${url}" class="mobile-foto" onclick="window.open('${url}', '_blank')" />
-                `).join('')}
-                ${entry.fotos.length > 5 ? `
-                    <span class="mobile-more-photos" onclick="showAllPhotos('${entry.id}')">
-                        +${entry.fotos.length - 5}
-                    </span>
-                ` : ''}
-            </div>
-        `;
+    // Crear archivos HTML para móvil
+    const archivos = entry.archivos || entry.fotos || []; // Mantener compatibilidad
+    let archivosHtml = '';
+    
+    if (archivos && archivos.length > 0) {
+        archivosHtml = '<div class="mobile-archivos-container">';
+        
+        archivos.slice(0, 5).forEach(archivo => {
+            const url = typeof archivo === 'string' ? archivo : archivo.url;
+            const name = typeof archivo === 'string' ? '' : archivo.name;
+            const type = typeof archivo === 'string' ? '' : archivo.type;
+            
+            if (type && type.startsWith('image/')) {
+                // Si es imagen, mostrar miniatura
+                archivosHtml += `<img src="${url}" class="mobile-foto" onclick="window.open('${url}', '_blank')" title="${name}" />`;
+            } else {
+                // Si es otro tipo de archivo, mostrar icono
+                const icon = getFileIcon(name || url);
+                archivosHtml += `<div class="mobile-file-icon" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
+            }
+        });
+        
+        if (archivos.length > 5) {
+            archivosHtml += `
+                <span class="mobile-more-photos" onclick="showAllArchivos('${entry.id}')">
+                    +${archivos.length - 5}
+                </span>
+            `;
+        }
+        
+        archivosHtml += '</div>';
     } else {
-        fotosHtml = '<div class="no-fotos-mobile">Sin fotos</div>';
+        archivosHtml = '<div class="no-fotos-mobile">Sin archivos</div>';
     }
     
     // Botones de acción según rol
     let actionButtons = '';
     
+    // Admin puede editar y eliminar cualquier entrada
     if (currentUser.role === 'admin') {
         actionButtons = `
             <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
             <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
         `;
-    } else if (entry.user_id === currentUser.id) {
+    } 
+    // Otros roles (interventoria, supervision, ordenador_gasto, contratista) solo pueden editar sus propias entradas
+    else if (entry.user_id === currentUser.id) {
         actionButtons = `
             <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
         `;
@@ -483,7 +553,10 @@ function createMobileEntryCard(entry) {
     
     card.innerHTML = `
         <div class="mobile-entry-header">
-            <div class="mobile-entry-date">${fechaFormateada}</div>
+            <div class="mobile-entry-date">
+                <strong>Folio: ${entry.folio || '-'}</strong><br>
+                ${fechaFormateada}
+            </div>
             <span class="entry-state state-${entry.estado}">${entry.estado}</span>
         </div>
         
@@ -499,6 +572,22 @@ function createMobileEntryCard(entry) {
             </div>
         ` : ''}
         
+        ${entry.hora_inicio || entry.hora_final ? `
+            <div class="mobile-entry-row">
+                <div class="mobile-entry-label">Horas:</div>
+                <div class="mobile-entry-content">
+                    ${entry.hora_inicio || '-'} ${entry.hora_inicio && entry.hora_final ? 'a' : ''} ${entry.hora_final || '-'}
+                </div>
+            </div>
+        ` : ''}
+        
+        ${entry.tipo_nota ? `
+            <div class="mobile-entry-row">
+                <div class="mobile-entry-label">Tipo Nota:</div>
+                <div class="mobile-entry-content">${entry.tipo_nota}</div>
+            </div>
+        ` : ''}
+        
         ${entry.ubicacion ? `
             <div class="mobile-entry-row">
                 <div class="mobile-entry-label">Ubicación:</div>
@@ -511,7 +600,7 @@ function createMobileEntryCard(entry) {
             <div class="mobile-entry-content">${entry.profiles?.email || entry.user_id || 'Usuario desconocido'}</div>
         </div>
         
-        ${fotosHtml}
+        ${archivosHtml}
         
         ${actionButtons ? `
             <div class="mobile-actions">
@@ -533,9 +622,13 @@ function createDesktopTable(entries) {
     const thead = document.createElement('thead');
     thead.innerHTML = `
         <tr>
+            <th>Folio</th>
             <th>Fecha y Hora</th>
             <th>Título</th>
             <th>Descripción</th>
+            <th>Hora Inicio</th>
+            <th>Hora Final</th>
+            <th>Tipo Nota</th>
             <th>Ubicación</th>
             <th>Estado</th>
             <th>Usuario</th>
@@ -550,33 +643,53 @@ function createDesktopTable(entries) {
     entries.forEach(entry => {
         const row = document.createElement('tr');
         
-        let fotosHtml = '';
-        if (entry.fotos && entry.fotos.length > 0) {
-            fotosHtml = `
-                <div class="fotos-container">
-                    ${entry.fotos.slice(0, 3).map(url => `
-                        <img src="${url}" class="mini-photo" onclick="window.open('${url}', '_blank')" />
-                    `).join('')}
-                    ${entry.fotos.length > 3 ? `
-                        <span class="more-photos" onclick="showAllPhotos('${entry.id}')" title="Ver todas las fotos">
-                            +${entry.fotos.length - 3}
-                        </span>
-                    ` : ''}
-                </div>
-            `;
+        let archivosHtml = '';
+        const archivos = entry.archivos || entry.fotos || []; // Mantener compatibilidad con datos antiguos
+        
+        if (archivos && archivos.length > 0) {
+            const archivosParaMostrar = archivos.slice(0, 3);
+            archivosHtml = '<div class="archivos-container">';
+            
+            archivosParaMostrar.forEach(archivo => {
+                const url = typeof archivo === 'string' ? archivo : archivo.url;
+                const name = typeof archivo === 'string' ? '' : archivo.name;
+                const type = typeof archivo === 'string' ? '' : archivo.type;
+                
+                if (type && type.startsWith('image/')) {
+                    // Si es imagen, mostrar miniatura
+                    archivosHtml += `<img src="${url}" class="mini-photo" onclick="window.open('${url}', '_blank')" title="${name}" />`;
+                } else {
+                    // Si es otro tipo de archivo, mostrar icono
+                    const icon = getFileIcon(name || url);
+                    archivosHtml += `<div class="file-icon-preview" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
+                }
+            });
+            
+            if (archivos.length > 3) {
+                archivosHtml += `
+                    <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los archivos">
+                        +${archivos.length - 3}
+                    </span>
+                `;
+            }
+            
+            archivosHtml += '</div>';
         } else {
-            fotosHtml = '<span class="no-photos">Sin fotos</span>';
+            archivosHtml = '<span class="no-photos">Sin archivos</span>';
         }
         
         // Botones de acción según rol
         let actionButtons = '';
         
+        // Admin puede editar y eliminar cualquier entrada
         if (currentUser.role === 'admin') {
             actionButtons = `
                 <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
                 <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
             `;
-        } else if (entry.user_id === currentUser.id) {
+        } 
+        // Otros roles (interventoria, supervision, ordenador_gasto, contratista) solo pueden editar sus propias entradas
+        else if (entry.user_id === currentUser.id) {
             actionButtons = `
                 <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
             `;
@@ -584,35 +697,39 @@ function createDesktopTable(entries) {
             actionButtons = '<span class="no-delete">-</span>';
         }
         
-        // Formatear fecha
+        // Formatear fecha directamente desde datetime-local
         const fechaUsar = entry.fecha_hora || entry.fecha;
-        let fechaMostrar;
-        let horaFormateada = '';
+        let fechaFormateada = '';
         
         if (fechaUsar.includes('T')) {
             const [datePart, timePart] = fechaUsar.split('T');
             const [year, month, day] = datePart.split('-');
             const [hours, minutes] = timePart.split(':');
-            fechaMostrar = new Date(year, month - 1, day, hours, minutes);
-            horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+            
+            // Formatear como DD/MM/YYYY HH:MM
+            fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
         } else {
-            fechaMostrar = new Date(fechaUsar + 'T00:00:00');
-            horaFormateada = '00:00';
+            // Si no tiene hora, mostrar solo fecha
+            const [year, month, day] = fechaUsar.split('-');
+            fechaFormateada = `${day}/${month}/${year}`;
         }
-        const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
         
         row.innerHTML = `
+            <td><strong>${entry.folio || '-'}</strong></td>
             <td>${fechaFormateada}</td>
             <td>${entry.titulo}</td>
             <td>${entry.descripcion || ''}</td>
+            <td>${entry.hora_inicio || '-'}</td>
+            <td>${entry.hora_final || '-'}</td>
+            <td>${entry.tipo_nota || '-'}</td>
             <td>${entry.ubicacion || ''}</td>
             <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
             <td>${entry.profiles?.email || entry.user_id || 'Usuario desconocido'}</td>
-            <td>${fotosHtml}</td>
+            <td>${archivosHtml}</td>
             <td>${actionButtons}</td>
         `;
         
-        row.dataset.fotos = JSON.stringify(entry.fotos || []);
+        row.dataset.archivos = JSON.stringify(entry.archivos || entry.fotos || []);
         tbody.appendChild(row);
     });
     table.appendChild(tbody);
@@ -620,68 +737,84 @@ function createDesktopTable(entries) {
     return table;
 }
 
-// Mostrar todas las fotos de una entrada
-function showAllPhotos(entryId) {
-    console.log('Buscando fotos para entryId:', entryId);
+// Mostrar todos los archivos de una entrada
+function showAllArchivos(entryId) {
+    console.log('Buscando archivos para entryId:', entryId);
     
-    let fotos = [];
+    let archivos = [];
     let found = false;
     
-    // Primero buscar en cards móviles
-    const mobileCards = document.querySelectorAll('.mobile-entry-card');
-    for (let card of mobileCards) {
-        const editBtn = card.querySelector('[onclick*="editEntry("]');
-        if (editBtn && editBtn.getAttribute('onclick').includes(`editEntry(${entryId})`)) {
-            // Buscar las fotos en la variable global allEntries
-            const entry = allEntries.find(e => e.id == entryId);
-            if (entry && entry.fotos) {
-                fotos = entry.fotos;
-                found = true;
-                break;
-            }
-        }
-    }
-    
-    // Si no encuentra en móvil, buscar en tabla desktop
-    if (!found) {
-        const rows = document.querySelectorAll('.excel-table tbody tr');
-        for (let row of rows) {
-            const editBtn = row.querySelector('.edit-btn');
-            if (editBtn && editBtn.getAttribute('onclick') && editBtn.getAttribute('onclick').includes(entryId.toString())) {
-                fotos = JSON.parse(row.dataset.fotos || '[]');
-                found = true;
-                break;
-            }
-        }
+    // Buscar en la variable global allEntries
+    const entry = allEntries.find(e => e.id == entryId);
+    if (entry) {
+        archivos = entry.archivos || entry.fotos || [];
+        found = true;
     }
     
     if (!found) {
         console.error('No se encontró la entrada para entryId:', entryId);
         return;
     }
-    console.log('Fotos encontradas:', fotos);
+    console.log('Archivos encontrados:', archivos);
     
-    if (fotos.length > 0) {
+    if (archivos.length > 0) {
         const modal = document.createElement('div');
         modal.className = 'photo-modal';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3>Todas las fotos (${fotos.length})</h3>
-                    <button class="close-modal" onclick="this.closest('.photo-modal').remove()">✕</button>
-                </div>
-                <div class="photos-grid">
-                    ${fotos.map(url => `
-                        <img src="${url}" onclick="window.open('${url}', '_blank')" />
-                    `).join('')}
-                </div>
+        
+        let modalContent = '<div class="modal-content">';
+        modalContent += `
+            <div class="modal-header">
+                <h3>Todos los archivos (${archivos.length})</h3>
+                <button class="close-modal" onclick="this.closest('.photo-modal').remove()">✕</button>
             </div>
+            <div class="files-grid">
         `;
+        
+        archivos.forEach(archivo => {
+            const url = typeof archivo === 'string' ? archivo : archivo.url;
+            const name = typeof archivo === 'string' ? '' : archivo.name;
+            const type = typeof archivo === 'string' ? '' : archivo.type;
+            const size = typeof archivo === 'string' ? '' : archivo.size;
+            
+            if (type && type.startsWith('image/')) {
+                // Para imágenes
+                modalContent += `
+                    <div class="file-item">
+                        <img src="${url}" onclick="window.open('${url}', '_blank')" />
+                        <div class="file-details">
+                            <div class="file-name">${name || 'Imagen'}</div>
+                            <div class="file-size">${formatFileSize(size)}</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Para otros archivos
+                const icon = getFileIcon(name || url);
+                modalContent += `
+                    <div class="file-item">
+                        <div class="file-icon-large" onclick="window.open('${url}', '_blank')">${icon}</div>
+                        <div class="file-details">
+                            <div class="file-name">${name || 'Archivo'}</div>
+                            <div class="file-size">${formatFileSize(size)}</div>
+                            <button class="download-btn" onclick="window.open('${url}', '_blank')">📥 Descargar</button>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        modalContent += '</div></div>';
+        modal.innerHTML = modalContent;
         document.body.appendChild(modal);
-        console.log('Modal agregado');
+        console.log('Modal de archivos agregado');
     } else {
-        console.log('No hay fotos para mostrar');
+        console.log('No hay archivos para mostrar');
     }
+}
+
+// Mantener compatibilidad con función anterior
+function showAllPhotos(entryId) {
+    showAllArchivos(entryId);
 }
 
 // Editar entrada
@@ -700,19 +833,50 @@ async function editEntry(entryId) {
     // Mostrar formulario primero
     showForm();
     
-    // Llenar formulario con datos existentes
-    document.getElementById('fecha').value = data.fecha;
-    document.getElementById('titulo').value = data.titulo;
-    document.getElementById('descripcion').value = data.descripcion || '';
-    document.getElementById('ubicacion').value = data.ubicacion || '';
+    // Llenar formulario con datos existentes - usar fecha directamente
+    let fechaParaFormulario = data.fecha;
+    
+    // Si viene con timezone Z o con segundos, ajustar al formato datetime-local
+    if (data.fecha && (data.fecha.includes('Z') || data.fecha.includes('.'))) {
+        const fecha = new Date(data.fecha);
+        const year = fecha.getFullYear();
+        const month = String(fecha.getMonth() + 1).padStart(2, '0');
+        const day = String(fecha.getDate()).padStart(2, '0');
+        const hours = String(fecha.getHours()).padStart(2, '0');
+        const minutes = String(fecha.getMinutes()).padStart(2, '0');
+        fechaParaFormulario = `${year}-${month}-${day}T${hours}:${minutes}`;
+    }
+    
+    document.getElementById('fecha').value = fechaParaFormulario;
+    
+    // Ajustar altura de textareas según su contenido
+    const tituloTextarea = document.getElementById('titulo');
+    tituloTextarea.value = data.titulo;
+    tituloTextarea.style.height = 'auto';
+    tituloTextarea.style.height = tituloTextarea.scrollHeight + 'px';
+    
+    const descripcionTextarea = document.getElementById('descripcion');
+    descripcionTextarea.value = data.descripcion || '';
+    descripcionTextarea.style.height = 'auto';
+    descripcionTextarea.style.height = descripcionTextarea.scrollHeight + 'px';
+    
+    document.getElementById('horaInicio').value = data.hora_inicio || '';
+    document.getElementById('horaFinal').value = data.hora_final || '';
+    document.getElementById('tipoNota').value = data.tipo_nota || '';
+    
+    const ubicacionTextarea = document.getElementById('ubicacion');
+    ubicacionTextarea.value = data.ubicacion || '';
+    ubicacionTextarea.style.height = 'auto';
+    ubicacionTextarea.style.height = ubicacionTextarea.scrollHeight + 'px';
+    
     document.getElementById('estado').value = data.estado;
     
     // Cambiar el comportamiento del formulario para actualizar
     const form = document.getElementById('bitacoraForm');
     form.dataset.editId = entryId;
     
-    // Guardar fotos existentes para referencia
-    form.dataset.existingPhotos = JSON.stringify(data.fotos || []);
+    // Guardar archivos existentes para referencia
+    form.dataset.existingPhotos = JSON.stringify(data.archivos || []);
     
     // Cambiar texto del botón y estilo
     const submitBtn = form.querySelector('button[type="submit"]');
@@ -722,9 +886,9 @@ async function editEntry(entryId) {
     // Ocultar preview de fotos al editar
     document.getElementById('photoPreview').style.display = 'none';
     
-    // Mostrar advertencia de actualización si hay fotos existentes
+    // Mostrar advertencia de actualización si hay archivos existentes
     const updateWarning = document.getElementById('updateWarning');
-    if (data.fotos && data.fotos.length > 0) {
+    if (data.archivos && data.archivos.length > 0) {
         updateWarning.style.display = 'block';
         document.getElementById('keepPhotosCheckbox').checked = true;
     } else {
@@ -767,6 +931,30 @@ async function checkAuth() {
     }
 }
 
+// Función para obtener nombre amigable del rol
+function getRoleDisplayName(role) {
+    const roleNames = {
+        'admin': 'Administrador',
+        'contratista': 'Contratista',
+        'interventoria': 'Interventoría',
+        'supervision': 'Supervisión del Contrato',
+        'ordenador_gasto': 'Ordenador del Gasto'
+    };
+    return roleNames[role] || role;
+}
+
+// Función para auto-ajustar altura de textareas
+function autoResize(textarea) {
+    // Guardar el scroll actual
+    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+    
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.max(44, textarea.scrollHeight) + 'px';
+    
+    // Restaurar scroll para evitar saltos en móvil
+    window.scrollTo(0, scrollTop);
+}
+
 // Event listeners
 document.getElementById('loginForm').addEventListener('submit', handleLogin);
 document.getElementById('bitacoraForm').addEventListener('submit', handleBitacoraSubmit);
@@ -774,7 +962,20 @@ document.getElementById('logoutBtn').addEventListener('click', handleLogout);
 document.getElementById('newEntryBtn').addEventListener('click', showForm);
 document.getElementById('cancelFormBtn').addEventListener('click', hideForm);
 
-// Preview de fotos
+// Auto-ajustar textareas al escribir
+document.getElementById('titulo')?.addEventListener('input', function() {
+    autoResize(this);
+});
+
+document.getElementById('descripcion')?.addEventListener('input', function() {
+    autoResize(this);
+});
+
+document.getElementById('ubicacion')?.addEventListener('input', function() {
+    autoResize(this);
+});
+
+// Preview de archivos
 document.getElementById('fotos')?.addEventListener('change', function(e) {
     const files = e.target.files;
     const preview = document.getElementById('photoPreview');
@@ -787,38 +988,85 @@ document.getElementById('fotos')?.addEventListener('change', function(e) {
         grid.innerHTML = '';
         
         Array.from(files).forEach((file, index) => {
+            const item = document.createElement('div');
+            item.className = 'file-preview-item';
+            
             if (file.type.startsWith('image/')) {
+                // Para imágenes, mostrar vista previa
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    const item = document.createElement('div');
-                    item.className = 'photo-preview-item';
-                    item.innerHTML = `<img src="${e.target.result}" alt="Foto ${index + 1}">`;
-                    grid.appendChild(item);
+                    item.innerHTML = `
+                        <div class="file-preview-content">
+                            <img src="${e.target.result}" alt="${file.name}">
+                            <div class="file-name">${file.name}</div>
+                        </div>
+                    `;
                 };
                 reader.readAsDataURL(file);
+            } else {
+                // Para otros archivos, mostrar icono según tipo
+                const icon = getFileIcon(file.name);
+                item.innerHTML = `
+                    <div class="file-preview-content">
+                        <div class="file-icon">${icon}</div>
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${formatFileSize(file.size)}</div>
+                    </div>
+                `;
             }
+            
+            grid.appendChild(item);
         });
         
         // Si estamos en modo edición, actualizar el texto informativo
-        const photoInfo = preview.querySelector('.photo-info');
-        if (isEditMode && photoInfo) {
+        const fileInfo = preview.querySelector('.file-info');
+        if (isEditMode && fileInfo) {
             const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
             if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
-                photoInfo.textContent = `ℹ️ ${files.length} fotos nuevas se agregarán a las existentes`;
+                fileInfo.textContent = `ℹ️ ${files.length} archivos nuevos se agregarán a los existentes`;
             } else {
-                photoInfo.textContent = `⚠️ ${files.length} fotos nuevas reemplazarán las fotos existentes`;
+                fileInfo.textContent = `⚠️ ${files.length} archivos nuevos reemplazarán los existentes`;
             }
         }
     } else {
         preview.style.display = 'none';
         
-        // Restaurar texto original si no hay fotos
-        const photoInfo = preview.querySelector('.photo-info');
-        if (photoInfo) {
-            photoInfo.textContent = 'ℹ️ Las fotos seleccionadas se agregarán al guardar';
+        // Restaurar texto original si no hay archivos
+        const fileInfo = preview.querySelector('.file-info');
+        if (fileInfo) {
+            fileInfo.textContent = 'ℹ️ Los archivos seleccionados se agregarán al guardar';
         }
     }
 });
+
+// Función para obtener icono según tipo de archivo
+function getFileIcon(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const iconMap = {
+        'pdf': '📄',
+        'doc': '📝',
+        'docx': '📝',
+        'xls': '📊',
+        'xlsx': '📊',
+        'ppt': '📋',
+        'pptx': '📋',
+        'jpg': '🖼️',
+        'jpeg': '🖼️',
+        'png': '🖼️',
+        'gif': '🖼️',
+        'webp': '🖼️'
+    };
+    return iconMap[ext] || '📎';
+}
+
+// Función para formatear tamaño de archivo
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
 
 // Event listeners para filtros
 document.getElementById('searchInput')?.addEventListener('input', filterAndDisplayEntries);
@@ -895,6 +1143,47 @@ document.head.appendChild(style);
 
 
 
+// Función para generar folio consecutivo
+async function generarFolioConsecutivo(resetear = false) {
+    try {
+        if (resetear) {
+            // Reiniciar foliado - solo para desarrollo/despliegue
+            console.log('🔄 Reiniciando foliado desde 0001');
+            return '0001';
+        }
+        
+        // Obtener el último folio registrado
+        const { data, error } = await supabaseClient
+            .from('bitacora')
+            .select('folio')
+            .not('folio', 'is', null)
+            .order('folio', { ascending: false })
+            .limit(1)
+            .single();
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 es "no rows returned"
+            console.error('Error al obtener último folio:', error);
+            return '0001'; // Fallback al primer folio
+        }
+        
+        let nuevoFolio;
+        if (data && data.folio) {
+            // Convertir folio a número, incrementar y formatear
+            const ultimoNumero = parseInt(data.folio) + 1;
+            nuevoFolio = String(ultimoNumero).padStart(4, '0');
+        } else {
+            // Si no hay folios previos, empezar desde 0001
+            nuevoFolio = '0001';
+        }
+        
+        console.log('🔢 Nuevo folio generado:', nuevoFolio);
+        return nuevoFolio;
+    } catch (error) {
+        console.error('Error en generarFolioConsecutivo:', error);
+        return '0001'; // Fallback
+    }
+}
+
 // Función para formatear fechas con zona horaria local
 function formatearFechaLocal(fechaString) {
     if (!fechaString) return 'Fecha no disponible';
@@ -922,7 +1211,7 @@ function formatearFechaLocal(fechaString) {
         timeZone: zonaHoraria
     });
     
-    const resultado = `${fechaFormateada} (${zonaHoraria})`;
+    const resultado = fechaFormateada;
     console.log('🎯 Fecha formateada final:', resultado);
     
     return resultado;

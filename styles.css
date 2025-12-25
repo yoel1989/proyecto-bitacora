@@ -195,6 +195,28 @@ main {
   resize: vertical;
 }
 
+/* Inputs autoajustables para título y ubicación */
+#titulo,
+#ubicacion {
+  min-height: 44px;
+  height: auto;
+  resize: vertical;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Para desktop mantener comportamiento normal */
+@media (min-width: 769px) {
+  #titulo,
+  #ubicacion {
+    height: 44px;
+    resize: none;
+    white-space: nowrap;
+    overflow-x: hidden;
+  }
+}
+
 .form-section button {
   background: #27ae60;
   color: white;

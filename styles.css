@@ -151,9 +151,6 @@ main {
   position: relative;
   max-width: 100%;
   scroll-margin-top: 20px;
-  max-height: 80vh !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
 }
 
 .form-group {
@@ -198,22 +195,16 @@ main {
   resize: vertical;
 }
 
-/* Inputs autoajustables para título y ubicación - solo ajuste vertical */
+/* Inputs autoajustables para título y ubicación - wrap normal */
 #titulo,
 #ubicacion {
-  min-height: 44px !important;
-  max-height: 120px !important;
-  height: auto !important;
-  resize: vertical !important;
-  overflow-y: auto !important;
-  overflow-x: hidden !important;
-  white-space: normal !important;
-  word-wrap: break-word !important;
-  word-break: break-word !important;
-  line-height: 1.4 !important;
-  padding: 0.75rem !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
+  min-height: 44px;
+  height: auto;
+  resize: none;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
 }
 
 /* Para desktop mantener comportamiento normal */
@@ -798,8 +789,6 @@ main {
 
 .form-section {
   animation: fadeInUp 0.5s ease;
-  max-height: 70vh;
-  overflow-y: auto;
 }
 
 .entries-section {
@@ -984,11 +973,7 @@ main {
     margin-bottom: 1.25rem;
   }
 
-  .form-section {
-    max-height: 70vh !important;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-  }
+
 
   /* Optimizar rendimiento en móvil */
   .form-section {

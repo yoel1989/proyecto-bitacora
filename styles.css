@@ -199,11 +199,14 @@ main {
 #titulo,
 #ubicacion {
   min-height: 44px;
-  height: auto;
+  height: auto !important;
   resize: vertical;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  overflow: auto;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  line-height: 1.4 !important;
+  padding: 0.75rem !important;
 }
 
 /* Para desktop mantener comportamiento normal */

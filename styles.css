@@ -195,24 +195,19 @@ main {
   resize: vertical;
 }
 
-/* Aplicar mismos estilos de textarea a título y ubicación */
+/* Título y ubicación - input normal que siempre funciona */
 #titulo,
 #ubicacion {
-  height: 80px;
-  resize: vertical;
+  /* Usar estilos base de .form-group input */
 }
 
-/* Para desktop: prevenir expansión horizontal */
-@media (min-width: 769px) {
+/* Mobile: permitir comportamiento especial si es necesario */
+@media (max-width: 768px) {
   #titulo,
   #ubicacion {
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    resize: none !important;
-    max-width: 100% !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
 }
 

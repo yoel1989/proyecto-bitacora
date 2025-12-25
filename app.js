@@ -331,17 +331,28 @@ async function loadBitacoraEntries() {
         
         // Cargar perfiles de usuarios
         const userIds = [...new Set(data.map(entry => entry.user_id))];
+        console.log('🔍 User IDs a buscar:', userIds);
+        
         if (userIds.length > 0) {
-            const { data: profiles } = await supabaseClient
+            const { data: profiles, error: profilesError } = await supabaseClient
                 .from('profiles')
                 .select('id, nombre, email')
                 .in('id', userIds);
             
+            console.log('👤 Perfiles encontrados:', profiles);
+            if (profilesError) {
+                console.error('❌ Error cargando perfiles:', profilesError);
+            }
+            
             // Mapear perfiles a las entradas
-            allEntries = data.map(entry => ({
-                ...entry,
-                profiles: profiles.find(p => p.id === entry.user_id) || { email: null }
-            }));
+            allEntries = data.map(entry => {
+                const profile = profiles.find(p => p.id === entry.user_id);
+                console.log(`🔗 Entrada ${entry.id} (${entry.titulo}) - User ID: ${entry.user_id} - Profile:`, profile);
+                return {
+                    ...entry,
+                    profiles: profile || { email: null }
+                };
+            });
         }
         
         filterAndDisplayEntries();

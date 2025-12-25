@@ -202,6 +202,20 @@ main {
   resize: vertical;
 }
 
+/* Para desktop: prevenir expansión horizontal */
+@media (min-width: 769px) {
+  #titulo,
+  #ubicacion {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    resize: none !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+}
+
 /* Para desktop mantener comportamiento normal */
 @media (min-width: 769px) {
   #titulo,

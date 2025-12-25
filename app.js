@@ -333,16 +333,34 @@ async function loadBitacoraEntries() {
         });
         allEntries = data;
         
-        // Simplificar: usar el user_id directamente como referencia de email
+        // Buscar emails en la tabla profiles
+        const userIds = [...new Set(data.map(entry => entry.user_id))];
+        const userEmails = {};
+        
+        if (userIds.length > 0) {
+            const { data: profiles } = await supabaseClient
+                .from('profiles')
+                .select('id, email')
+                .in('id', userIds);
+            
+            // Mapear los emails encontrados
+            profiles.forEach(profile => {
+                if (profile.email) {
+                    userEmails[profile.id] = profile.email;
+                }
+            });
+        }
+        
+        // Asignar emails a las entradas
         allEntries = data.map(entry => ({
             ...entry,
-            // Simplificar el perfil para evitar problemas de carga
             profiles: {
-                email: entry.user_id // Usar el ID como referencia temporal
+                email: userEmails[entry.user_id] || entry.user_id
             }
         }));
         
-        console.log('📋 Entradas procesadas con perfiles simplificados:', allEntries.length);
+        console.log('📋 Entradas procesadas con emails de profiles:', allEntries.length);
+        console.log('📧 Emails mapeados:', userEmails);
         
         filterAndDisplayEntries();
     }

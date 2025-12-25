@@ -62,12 +62,14 @@ async function getUserProfile() {
         .eq('id', currentUser.id)
         .single();
     
-    if (data) {
+if (data) {
         currentUser.role = data.rol; // Guardar el rol
+        currentUser.nombre = data.nombre; // Guardar el nombre
         document.getElementById('userName').textContent = data.nombre || data.email;
         document.getElementById('userRole').textContent = '(' + data.rol + ')';
     } else {
         currentUser.role = 'contratista'; // Rol por defecto
+        currentUser.nombre = currentUser.email; // Fallback al email
     }
 }
 
@@ -80,10 +82,11 @@ function showForm() {
     entriesSection.style.display = 'none';
     formSection.style.display = 'block';
     
-    // Establecer fecha y hora actual
+    // Establecer fecha y hora actual con zona horaria local
     const fechaInput = document.getElementById('fecha');
     if (fechaInput && !fechaInput.value) {
         const now = new Date();
+        // Usar la zona horaria local del navegador
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
@@ -92,6 +95,10 @@ function showForm() {
         
         const localDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
         fechaInput.value = localDateTime;
+        
+        console.log('📍 Zona horaria detectada:', Intl.DateTimeFormat().resolvedOptions().timeZone);
+        console.log('🕒 Fecha y hora local establecida:', localDateTime);
+        console.log('⏰ Hora actual:', `${hours}:${minutes}`);
     }
     
     // Simple scroll al inicio del main
@@ -227,16 +234,22 @@ async function handleBitacoraSubmit(e) {
         }
     }
     
-    const fechaInput = document.getElementById('fecha').value;
+const fechaInput = document.getElementById('fecha').value;
     console.log('Fecha del input:', fechaInput);
+    console.log('📍 Zona horaria actual:', Intl.DateTimeFormat().resolvedOptions().timeZone);
     
-    // Guardar como string completo de datetime-local para preservar hora
-    let fechaGuardada = fechaInput;
+    if (!fechaInput) {
+        alert('⚠️ Por favor selecciona una fecha y hora');
+        return;
+    }
+    
+    // Guardar fecha completa con hora
+    console.log('🕒 Fecha local original:', fechaInput);
+    console.log('🌐 Intentando guardar directamente el datetime-local:', fechaInput);
     
     const formData = {
         user_id: currentUser.id,
-        fecha: fechaGuardada, // Mantener para compatibilidad
-        fecha_hora: fechaInput, // Nueva columna con hora completa
+        fecha: fechaInput, // Intentar guardar directamente el datetime-local
         titulo: document.getElementById('titulo').value,
         descripcion: document.getElementById('descripcion').value,
         ubicacion: document.getElementById('ubicacion').value,
@@ -244,8 +257,7 @@ async function handleBitacoraSubmit(e) {
         fotos: fotoUrls
     };
     
-    console.log('FormData a guardar:', formData);
-    console.log('Fecha guardada como UTC:', fechaGuardada);
+console.log('FormData a guardar:', formData);
     console.log('Fotos finales:', fotoUrls.length, 'fotos');
     
     let data, error;
@@ -258,13 +270,14 @@ async function handleBitacoraSubmit(e) {
             .eq('id', editId)
             .select();
         
-        data = updateData;
+data = updateData;
         error = updateError;
     } else {
         // Crear nueva entrada
         const { data: insertData, error: insertError } = await supabaseClient
             .from('bitacora')
-            .insert([formData]);
+            .insert(formData)
+            .select();
         
         data = insertData;
         error = insertError;
@@ -274,7 +287,8 @@ async function handleBitacoraSubmit(e) {
         console.error('Error guardando:', error);
         alert('Error al guardar: ' + error.message);
     } else {
-        console.log('Entrada guardada en DB:', data);
+        console.log('✅ Entrada guardada en DB:', data);
+        console.log('🕒 Fecha guardada en DB:', data[0]?.fecha);
         document.getElementById('bitacoraForm').reset();
         await loadBitacoraEntries();
         hideForm();
@@ -297,20 +311,39 @@ async function handleBitacoraSubmit(e) {
 async function loadBitacoraEntries() {
     const { data, error } = await supabaseClient
         .from('bitacora')
-        .select(`
-            *,
-            profiles (
-                nombre,
-                email,
-                rol
-            )
-        `)
+        .select('*')
         .order('fecha', { ascending: false });
     
     if (error) {
         console.error('Error al cargar entradas:', error);
     } else {
+        console.log('📥 Entradas cargadas desde DB:', data);
+        data.forEach((entry, index) => {
+            console.log(`📋 Entrada ${index}:`, {
+                id: entry.id,
+                titulo: entry.titulo,
+                fecha: entry.fecha,
+                tipo: typeof entry.fecha,
+                longitud: entry.fecha?.length
+            });
+        });
         allEntries = data;
+        
+        // Cargar perfiles de usuarios
+        const userIds = [...new Set(data.map(entry => entry.user_id))];
+        if (userIds.length > 0) {
+            const { data: profiles } = await supabaseClient
+                .from('profiles')
+                .select('id, nombre, email')
+                .in('id', userIds);
+            
+            // Mapear perfiles a las entradas
+            allEntries = data.map(entry => ({
+                ...entry,
+                profiles: profiles.find(p => p.id === entry.user_id)
+            }));
+        }
+        
         filterAndDisplayEntries();
     }
 }
@@ -392,193 +425,70 @@ function createMobileEntryCard(entry) {
     const card = document.createElement('div');
     card.className = 'mobile-entry-card';
     
-    // Formatear fecha
-    const fechaUsar = entry.fecha_hora || entry.fecha;
-    let fechaMostrar;
-    let horaFormateada = '';
+    // Formatear fecha con zona horaria local
+    const fechaFormateada = formatearFechaLocal(entry.fecha_hora || entry.fecha);
     
-    if (fechaUsar.includes('T')) {
-        const [datePart, timePart] = fechaUsar.split('T');
-        const [year, month, day] = datePart.split('-');
-        const [hours, minutes] = timePart.split(':');
-        fechaMostrar = new Date(year, month - 1, day, hours, minutes);
-        horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-    } else {
-        fechaMostrar = new Date(fechaUsar + 'T00:00:00');
-        horaFormateada = '00:00';
-    }
-    const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
-    
-    // Generar HTML de fotos
+    // Crear fotos HTML para móvil
     let fotosHtml = '';
     if (entry.fotos && entry.fotos.length > 0) {
         fotosHtml = `
-            <div class="mobile-fotos-container">
-                ${entry.fotos.slice(0, 5).map(url => `
-                    <img src="${url}" class="mobile-foto" onclick="window.open('${url}', '_blank')" />
+            <div class="mobile-fotos">
+                ${entry.fotos.slice(0, 3).map(url => `
+                    <img src="${url}" class="mobile-photo" onclick="window.open('${url}', '_blank')" />
                 `).join('')}
-                ${entry.fotos.length > 5 ? `
+                ${entry.fotos.length > 3 ? `
                     <span class="mobile-more-photos" onclick="showAllPhotos('${entry.id}')">
-                        +${entry.fotos.length - 5}
+                        +${entry.fotos.length - 3}
                     </span>
                 ` : ''}
             </div>
         `;
     } else {
-        fotosHtml = '<div class="no-fotos-mobile">Sin fotos</div>';
+        fotosHtml = '<span class="mobile-no-photos">Sin fotos</span>';
     }
     
-    // Generar botones de acción
+    // Botones de acción según rol
     let actionButtons = '';
+    
     if (currentUser.role === 'admin') {
         actionButtons = `
-            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+            <div class="mobile-actions">
+                <button class="mobile-btn edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
+                <button class="mobile-btn delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
+            </div>
         `;
     } else if (entry.user_id === currentUser.id) {
         actionButtons = `
-            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+            <div class="mobile-actions">
+                <button class="mobile-btn edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
+            </div>
         `;
     } else {
-        actionButtons = '<span class="no-delete">-</span>';
+        actionButtons = '<div class="mobile-no-actions">Solo lectura</div>';
     }
     
     card.innerHTML = `
-        <div class="mobile-entry-header">
-            <div class="mobile-entry-date">${fechaFormateada}</div>
-            <span class="entry-state state-${entry.estado}">${entry.estado}</span>
+        <div class="mobile-card-header">
+            <div class="mobile-title">${entry.titulo}</div>
+            <div class="mobile-date">${fechaFormateada}</div>
         </div>
-        
-        <div class="mobile-entry-row">
-            <div class="mobile-entry-label">Título:</div>
-            <div class="mobile-entry-content">${entry.titulo}</div>
+        <div class="mobile-card-body">
+            ${entry.descripcion ? `<p class="mobile-description">${entry.descripcion}</p>` : ''}
+            ${entry.ubicacion ? `<div class="mobile-location">📍 ${entry.ubicacion}</div>` : ''}
+            <div class="mobile-state">
+                <span class="entry-state state-${entry.estado}">${entry.estado}</span>
+            </div>
+            <div class="mobile-user">
+                👤 ${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}
+            </div>
+            ${fotosHtml ? `<div class="mobile-fotos-section">${fotosHtml}</div>` : ''}
         </div>
-        
-        ${entry.descripcion ? `
-            <div class="mobile-entry-row">
-                <div class="mobile-entry-label">Descripción:</div>
-                <div class="mobile-entry-content">${entry.descripcion}</div>
-            </div>
-        ` : ''}
-        
-        ${entry.ubicacion ? `
-            <div class="mobile-entry-row">
-                <div class="mobile-entry-label">Ubicación:</div>
-                <div class="mobile-entry-content">${entry.ubicacion}</div>
-            </div>
-        ` : ''}
-        
-        <div class="mobile-entry-row">
-            <div class="mobile-entry-label">Usuario:</div>
-            <div class="mobile-entry-content">${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</div>
+        <div class="mobile-card-footer">
+            ${actionButtons}
         </div>
-        
-        ${fotosHtml}
-        
-        ${actionButtons ? `
-            <div class="mobile-actions">
-                <div class="mobile-actions-container">${actionButtons}</div>
-            </div>
-        ` : ''}
     `;
     
     return card;
-}
-
-// Crear tabla unificada
-function createUnifiedTable(entries) {
-    const table = document.createElement('table');
-    table.className = 'excel-table';
-    
-    // Header
-    const thead = document.createElement('thead');
-    thead.innerHTML = `
-        <tr>
-            <th>Fecha y Hora</th>
-            <th>Título</th>
-            <th>Descripción</th>
-            <th>Ubicación</th>
-            <th>Estado</th>
-            <th>Usuario</th>
-            <th>Fotos</th>
-            <th>Acciones</th>
-        </tr>
-    `;
-    table.appendChild(thead);
-    
-    // Body
-    const tbody = document.createElement('tbody');
-    entries.forEach(entry => {
-        const row = document.createElement('tr');
-        
-        let fotosHtml = '';
-        if (entry.fotos && entry.fotos.length > 0) {
-            fotosHtml = `
-                <div class="fotos-container">
-                    ${entry.fotos.slice(0, 3).map(url => `
-                        <img src="${url}" class="mini-photo" onclick="window.open('${url}', '_blank')" />
-                    `).join('')}
-                    ${entry.fotos.length > 3 ? `
-                        <span class="more-photos" onclick="showAllPhotos('${entry.id}')" title="Ver todas las fotos">
-                            +${entry.fotos.length - 3}
-                        </span>
-                    ` : ''}
-                </div>
-            `;
-        } else {
-            fotosHtml = '<span class="no-photos">Sin fotos</span>';
-        }
-        
-        // Botones de acción según rol
-        let actionButtons = '';
-        
-        if (currentUser.role === 'admin') {
-            actionButtons = `
-                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
-            `;
-        } else if (entry.user_id === currentUser.id) {
-            actionButtons = `
-                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-            `;
-        } else {
-            actionButtons = '<span class="no-delete">-</span>';
-        }
-        
-        // Formatear fecha
-        const fechaUsar = entry.fecha_hora || entry.fecha;
-        let fechaMostrar;
-        let horaFormateada = '';
-        
-        if (fechaUsar.includes('T')) {
-            const [datePart, timePart] = fechaUsar.split('T');
-            const [year, month, day] = datePart.split('-');
-            const [hours, minutes] = timePart.split(':');
-            fechaMostrar = new Date(year, month - 1, day, hours, minutes);
-            horaFormateada = `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
-        } else {
-            fechaMostrar = new Date(fechaUsar + 'T00:00:00');
-            horaFormateada = '00:00';
-        }
-        const fechaFormateada = `${String(fechaMostrar.getDate()).padStart(2, '0')}/${String(fechaMostrar.getMonth() + 1).padStart(2, '0')}/${fechaMostrar.getFullYear()} ${horaFormateada}`;
-        
-        row.innerHTML = `
-            <td>${fechaFormateada}</td>
-            <td>${entry.titulo}</td>
-            <td>${entry.descripcion || ''}</td>
-            <td>${entry.ubicacion || ''}</td>
-            <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
-            <td>${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</td>
-            <td>${fotosHtml}</td>
-            <td>${actionButtons}</td>
-        `;
-        
-        row.dataset.fotos = JSON.stringify(entry.fotos || []);
-        tbody.appendChild(row);
-    });
-    table.appendChild(tbody);
-    
-    return table;
 }
 
 // Crear tabla desktop
@@ -952,6 +862,39 @@ style.textContent = `
 document.head.appendChild(style);
 
 
+
+// Función para formatear fechas con zona horaria local
+function formatearFechaLocal(fechaString) {
+    if (!fechaString) return 'Fecha no disponible';
+    
+    console.log('🔍 Fecha original recibida:', fechaString);
+    console.log('🔍 Tipo de dato:', typeof fechaString);
+    
+    const fecha = new Date(fechaString);
+    if (isNaN(fecha.getTime())) {
+        console.log('❌ Fecha inválida al crear Date');
+        return 'Fecha inválida';
+    }
+    
+    console.log('✅ Date object creado:', fecha);
+    console.log('✅ Hora del Date:', fecha.getHours(), ':', fecha.getMinutes());
+    
+    const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const fechaFormateada = fecha.toLocaleString('es-CO', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+        timeZone: zonaHoraria
+    });
+    
+    const resultado = `${fechaFormateada} (${zonaHoraria})`;
+    console.log('🎯 Fecha formateada final:', resultado);
+    
+    return resultado;
+}
 
 // Iniciar
 checkAuth();

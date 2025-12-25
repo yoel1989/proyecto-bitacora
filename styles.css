@@ -195,20 +195,19 @@ main {
   resize: vertical;
 }
 
-/* Título y ubicación - input normal que siempre funciona */
+/* Título y ubicación - ancho fijo, ajuste vertical */
 #titulo,
 #ubicacion {
-  /* Usar estilos base de .form-group input */
-}
-
-/* Mobile: permitir comportamiento especial si es necesario */
-@media (max-width: 768px) {
-  #titulo,
-  #ubicacion {
-    white-space: normal;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-  }
+  width: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  height: auto !important;
+  resize: none !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  overflow: hidden !important;
+  padding: 0.75rem !important;
 }
 
 /* Para desktop mantener comportamiento normal */

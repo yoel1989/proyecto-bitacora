@@ -65,7 +65,7 @@ async function getUserProfile() {
 if (data) {
         currentUser.role = data.rol; // Guardar el rol
         currentUser.nombre = data.nombre; // Guardar el nombre
-        document.getElementById('userName').textContent = data.nombre || data.email;
+        document.getElementById('userName').textContent = data.email;
         document.getElementById('userRole').textContent = '(' + data.rol + ')';
     } else {
         currentUser.role = 'contratista'; // Rol por defecto
@@ -490,7 +490,7 @@ function createMobileEntryCard(entry) {
         
         <div class="mobile-entry-row">
             <div class="mobile-entry-label">Usuario:</div>
-            <div class="mobile-entry-content">${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</div>
+            <div class="mobile-entry-content">${entry.profiles?.email || 'Usuario desconocido'}</div>
         </div>
         
         ${fotosHtml}
@@ -589,7 +589,7 @@ function createDesktopTable(entries) {
             <td>${entry.descripcion || ''}</td>
             <td>${entry.ubicacion || ''}</td>
             <td><span class="entry-state state-${entry.estado}">${entry.estado}</span></td>
-            <td>${entry.profiles?.nombre || entry.profiles?.email || 'Usuario desconocido'}</td>
+            <td>${entry.profiles?.email || 'Usuario desconocido'}</td>
             <td>${fotosHtml}</td>
             <td>${actionButtons}</td>
         `;

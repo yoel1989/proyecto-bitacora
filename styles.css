@@ -221,13 +221,41 @@ main {
 
 /* Para desktop mantener comportamiento normal */
 @media (min-width: 769px) {
-  #titulo,
-  #ubicacion {
+  #titulo {
     height: 44px;
     resize: none;
     white-space: nowrap;
     overflow-x: hidden;
   }
+  
+  #ubicacion {
+    height: auto;
+    min-height: 44px;
+    resize: none;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+
+/* Corregir campo ubicación en vista de tabla principal */
+.mobile-entry-card .mobile-entry-content,
+.excel-table td {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  max-width: 200px !important;
+}
+
+.excel-table td:nth-child(8), /* Columna de ubicación */
+.mobile-entry-card .mobile-entry-row:nth-child(6) .mobile-entry-content {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  max-width: 150px !important;
+  hyphens: auto !important;
 }
 
 .form-section button {
@@ -298,9 +326,88 @@ main {
   }
 }
 
+/* Zoom responsive - vista principal tabla y cards */
+@media (max-width: 1340px) {
+  .excel-table {
+    font-size: 0.85rem;
+  }
+  
+  .excel-table th,
+  .excel-table td {
+    padding: 8px 10px;
+  }
+  
+  .mobile-entry-card {
+    margin: 0.75rem;
+  }
+  
+  .mobile-entry-content {
+    font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 1200px) {
+  .excel-table {
+    font-size: 0.8rem;
+    overflow-x: auto;
+    display: block;
+    max-width: 100%;
+  }
+  
+  .excel-table th,
+  .excel-table td {
+    padding: 6px 8px;
+    min-width: 80px;
+  }
+  
+  .excel-table th:nth-child(4), /* Descripción */
+  .excel-table td:nth-child(4) {
+    min-width: 150px;
+  }
+  
+  .excel-table th:nth-child(8), /* Usuario */
+  .excel-table td:nth-child(8) {
+    min-width: 120px;
+  }
+  
+  .mobile-entry-card {
+    margin: 0.5rem;
+    padding: 0.75rem;
+  }
+  
+  .mobile-entry-content {
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .excel-table {
+    font-size: 0.75rem;
+  }
+  
+  .excel-table th,
+  .excel-table td {
+    padding: 4px 6px;
+  }
+  
+  .mobile-entry-card {
+    margin: 0.25rem;
+    padding: 0.5rem;
+  }
+  
+  .mobile-entry-content {
+    font-size: 0.75rem;
+  }
+  
+  .mobile-foto {
+    width: 40px;
+    height: 40px;
+  }
+}
+
 .filter-group {
   flex: 1;
-  min-width: 200px;
+  min-width: 160px;
 }
 
 .filter-group input,
@@ -323,18 +430,34 @@ main {
   transform: translateY(-1px);
 }
 
+.download-pdf-btn {
+    background: linear-gradient(135deg, #27ae60, #229954);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+    margin-right: 8px;
+}
+
+.download-pdf-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+}
+
 .clear-filters-btn {
-  background: linear-gradient(135deg, #6c757d, #5a6268);
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.3s ease;
-  white-space: nowrap;
-  font-weight: 600;
-  box-shadow: 0 4px 15px rgba(108, 117, 125, 0.3);
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    white-space: nowrap;
+    transition: all 0.3s ease;
 }
 
 .clear-filters-btn:hover {

@@ -6,6 +6,8 @@
     <title>Bitácora de Obra</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="config.js"></script>
 </head>
 <body>
@@ -138,7 +140,7 @@
                 <div class="filters-section">
                     <div class="filter-row">
                         <div class="filter-group">
-                            <input type="text" id="searchInput" placeholder="🔍 Buscar por título o descripción...">
+                            <input type="text" id="searchInput" placeholder="🔍 Buscar por palabra clave...">
                         </div>
                         <div class="filter-group">
                             <select id="estadoFilter">
@@ -149,8 +151,21 @@
                             </select>
                         </div>
                         <div class="filter-group">
+                            <select id="tipoFilter">
+                                <option value="">Tipo de nota</option>
+                                <option value="avance">Avance</option>
+                                <option value="incidente">Incidente</option>
+                                <option value="observacion">Observación</option>
+                                <option value="reunion">Reunión</option>
+                                <option value="documento">Documento</option>
+                                <option value="fotografico">Registro Fotográfico</option>
+                                <option value="otro">Otro</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
                             <input type="date" id="fechaFilter">
                         </div>
+                        <button id="downloadPdf" class="download-pdf-btn">📥 Descargar PDF</button>
                         <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
                     </div>
                 </div>

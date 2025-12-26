@@ -291,15 +291,29 @@ const fechaInput = document.getElementById('fecha').value;
     console.log('🕒 Fecha local original:', fechaInput);
     console.log('📍 Zona horaria actual:', Intl.DateTimeFormat().resolvedOptions().timeZone);
     
-    // Generar folio consecutivo
-    const folio = await generarFolioConsecutivo();
+    // Generar folio consecutivo SOLO para nuevas entradas
+    let folio;
+    if (editId) {
+        // Si es actualización, mantener el folio existente
+        const { data: existingEntry } = await supabaseClient
+            .from('bitacora')
+            .select('folio')
+            .eq('id', editId)
+            .single();
+        folio = existingEntry.folio;
+        console.log('🔄 Manteniendo folio existente:', folio);
+    } else {
+        // Si es nueva entrada, generar folio nuevo
+        folio = await generarFolioConsecutivo();
+        console.log('🆕 Nuevo folio generado:', folio);
+    }
     
     // Guardar directamente el datetime-local sin conversión UTC
     console.log('🕒 Fecha local original:', fechaInput);
-    console.log('🔢 Folio generado:', folio);
+    console.log('📍 Zona horaria actual:', Intl.DateTimeFormat().resolvedOptions().timeZone);
     
     const formData = {
-        folio: folio, // Agregar folio
+        folio: folio, // Agregar folio (existente o nuevo)
         user_id: currentUser.id,
         fecha: fechaInput, // Guardar directamente como datetime-local
         titulo: document.getElementById('titulo').value,
@@ -421,19 +435,39 @@ async function loadBitacoraEntries() {
 function filterAndDisplayEntries() {
     let filteredEntries = [...allEntries];
     
-    // Filtrar por búsqueda
+    // Filtrar por búsqueda (ahora busca en todos los campos)
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     if (searchTerm) {
-        filteredEntries = filteredEntries.filter(entry => 
-            entry.titulo.toLowerCase().includes(searchTerm) ||
-            (entry.descripcion && entry.descripcion.toLowerCase().includes(searchTerm))
-        );
+        filteredEntries = filteredEntries.filter(entry => {
+            const searchFields = [
+                entry.titulo,
+                entry.descripcion,
+                entry.tipo_nota,
+                entry.ubicacion,
+                entry.estado,
+                entry.hora_inicio,
+                entry.hora_final,
+                entry.folio,
+                entry.profiles?.email,
+                entry.user_id
+            ].filter(field => field); // Filtrar campos nulos/undefined
+            
+            return searchFields.some(field => 
+                field.toLowerCase().includes(searchTerm)
+            );
+        });
     }
     
     // Filtrar por estado
     const estadoFilter = document.getElementById('estadoFilter').value;
     if (estadoFilter) {
         filteredEntries = filteredEntries.filter(entry => entry.estado === estadoFilter);
+    }
+    
+    // Filtrar por tipo de nota
+    const tipoFilter = document.getElementById('tipoFilter').value;
+    if (tipoFilter) {
+        filteredEntries = filteredEntries.filter(entry => entry.tipo_nota === tipoFilter);
     }
     
     // Filtrar por fecha
@@ -1071,10 +1105,13 @@ function formatFileSize(bytes) {
 // Event listeners para filtros
 document.getElementById('searchInput')?.addEventListener('input', filterAndDisplayEntries);
 document.getElementById('estadoFilter')?.addEventListener('change', filterAndDisplayEntries);
+document.getElementById('tipoFilter')?.addEventListener('change', filterAndDisplayEntries);
 document.getElementById('fechaFilter')?.addEventListener('change', filterAndDisplayEntries);
+document.getElementById('downloadPdf')?.addEventListener('click', downloadPDF);
 document.getElementById('clearFilters')?.addEventListener('click', () => {
     document.getElementById('searchInput').value = '';
     document.getElementById('estadoFilter').value = '';
+    document.getElementById('tipoFilter').value = '';
     document.getElementById('fechaFilter').value = '';
     document.getElementById('photosPreview').style.display = 'none';
     filterAndDisplayEntries();
@@ -1215,6 +1252,230 @@ function formatearFechaLocal(fechaString) {
     console.log('🎯 Fecha formateada final:', resultado);
     
     return resultado;
+}
+
+// Función para descargar PDF
+async function downloadPDF() {
+    try {
+        // Mostrar indicador de carga
+        showNotification('📄 Generando PDF...', 'info');
+        
+        // Obtener las entradas filtradas actuales
+        let filteredEntries = [...allEntries];
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const estadoFilter = document.getElementById('estadoFilter').value;
+        const tipoFilter = document.getElementById('tipoFilter').value;
+        const fechaFilter = document.getElementById('fechaFilter').value;
+        
+        // Aplicar filtros (mismo código que filterAndDisplayEntries)
+        if (searchTerm) {
+            filteredEntries = filteredEntries.filter(entry => {
+                const searchFields = [
+                    entry.titulo,
+                    entry.descripcion,
+                    entry.tipo_nota,
+                    entry.ubicacion,
+                    entry.estado,
+                    entry.hora_inicio,
+                    entry.hora_final,
+                    entry.folio,
+                    entry.profiles?.email,
+                    entry.user_id
+                ].filter(field => field);
+                
+                return searchFields.some(field => 
+                    field.toLowerCase().includes(searchTerm)
+                );
+            });
+        }
+        
+        if (estadoFilter) {
+            filteredEntries = filteredEntries.filter(entry => entry.estado === estadoFilter);
+        }
+        
+        if (tipoFilter) {
+            filteredEntries = filteredEntries.filter(entry => entry.tipo_nota === tipoFilter);
+        }
+        
+        if (fechaFilter) {
+            filteredEntries = filteredEntries.filter(entry => {
+                const entryDate = new Date(entry.fecha || entry.fecha_hora).toISOString().split('T')[0];
+                return entryDate === fechaFilter;
+            });
+        }
+        
+        if (filteredEntries.length === 0) {
+            showNotification('❌ No hay entradas para generar PDF', 'error');
+            return;
+        }
+        
+        // Crear un contenedor temporal para el PDF
+        const pdfContainer = document.createElement('div');
+        pdfContainer.style.cssText = `
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
+            width: 190mm;
+            background: white;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+            font-size: 8px;
+            margin: 0;
+            text-align: center;
+            box-sizing: border-box;
+        `;
+        
+        // Generar encabezado
+        let filtersInfo = [];
+        if (searchTerm) filtersInfo.push(`Búsqueda: "${searchTerm}"`);
+        if (estadoFilter) filtersInfo.push(`Estado: ${estadoFilter}`);
+        if (tipoFilter) filtersInfo.push(`Tipo: ${tipoFilter}`);
+        if (fechaFilter) filtersInfo.push(`Fecha: ${fechaFilter}`);
+        
+        const filtersText = filtersInfo.length > 0 ? filtersInfo.join(' | ') : 'Todos los registros';
+        
+        // Crear HTML para el PDF
+        let pdfHTML = `
+            <div style="margin-bottom: 15px; background-color: #e3f2fd; padding: 8px; border: 2px solid #1976d2; border-radius: 8px; width: calc(100% - 6px); box-sizing: border-box;">
+                <h1 style="text-align: center; color: #000000; margin: 5px 0; font-size: 14px; font-weight: bold;">📋 Bitácora de Obra</h1>
+                <div style="text-align: center; color: #000000; margin: 5px 0; font-size: 11px;">
+                    📅 Generado: ${new Date().toLocaleString('es-CO')}<br>
+                    👤 Usuario: ${currentUser.email}<br>
+                    🔍 Filtros: ${filtersText}<br>
+                    📊 Total: ${filteredEntries.length} entradas
+                </div>
+                <hr style="border: 1px solid #90caf9; margin: 10px 0;">
+            </div>
+        `;
+        
+        // Crear tabla para el PDF - formato vertical centrado y ajustado
+        pdfHTML += `
+            <div style="width: calc(100% - 6px); overflow: hidden; margin: 0 auto;">
+                <table style="width: 100%; max-width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed; margin: 0 auto; page-break-inside: auto;">
+                    <thead>
+                        <tr style="background-color: #1976d2; color: white; height: 20px;">
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Título</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 25%; font-weight: bold;">Descripción</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Inicio</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Final</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 7%; font-weight: bold;">Tipo</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 6%; font-weight: bold;">Estado</th>
+                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 13%; font-weight: bold;">Usuario</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        // Agregar filas de datos
+        filteredEntries.forEach(entry => {
+            const fechaUsar = entry.fecha_hora || entry.fecha;
+            let fechaFormateada = '';
+            
+            if (fechaUsar.includes('T')) {
+                const [datePart, timePart] = fechaUsar.split('T');
+                const [year, month, day] = datePart.split('-');
+                const [hours, minutes] = timePart.split(':');
+                fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
+            } else {
+                const [year, month, day] = fechaUsar.split('-');
+                fechaFormateada = `${day}/${month}/${year}`;
+            }
+            
+            // Combinar horas en una sola columna para ahorrar espacio
+            const horas = `${entry.hora_inicio || '-'} ${entry.hora_inicio && entry.hora_final ? '-' : ''} ${entry.hora_final || ''}`;
+            const horasFin = entry.hora_final || '-';
+            
+            // Truncar texto largo ajustado a nuevos anchos - sin truncar email
+            const titulo = (entry.titulo || '').substring(0, 60) + ((entry.titulo || '').length > 60 ? '...' : '');
+            const descripcion = (entry.descripcion || '').substring(0, 80) + ((entry.descripcion || '').length > 80 ? '...' : '');
+            const userEmail = (entry.profiles?.email || entry.user_id || 'Usuario desconocido'); // Sin truncar para que se vea completo
+            
+            const rowColor = filteredEntries.indexOf(entry) % 2 === 0 ? '#ffffff' : '#f8f9fa';
+            pdfHTML += `
+                <tr style="font-size: 8px; height: 16px; background-color: ${rowColor};">
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; font-weight: bold; color: #000000;">${entry.folio || '-'}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${fechaFormateada}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000; font-weight: bold;">${titulo}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${descripcion}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; overflow: hidden; color: #000000;">${entry.hora_inicio || '-'}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; overflow: hidden; color: #000000;">${entry.hora_final || '-'}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${entry.tipo_nota || '-'}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; overflow: hidden; color: #000000;">${entry.estado || ''}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; overflow: visible; color: #000000; white-space: normal;">${userEmail}</td>
+                </tr>
+            `;
+        });
+        
+        pdfHTML += `
+                </tbody>
+            </table>
+            </div>
+            <div style="margin-top: 15px; text-align: center; color: #000000; font-size: 9px; clear: both;">
+                <hr style="border: 1px solid #90caf9; margin: 5px 0;">
+                Bitácora de Obra - Sistema de Registro Digital
+            </div>
+        `;
+        
+        pdfContainer.innerHTML = pdfHTML;
+        document.body.appendChild(pdfContainer);
+        
+        // Forzar un pequeño retraso para que los estilos se apliquen completamente
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Generar PDF usando html2canvas y jsPDF - orientación vertical
+        const canvas = await html2canvas(pdfContainer, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',  // Fondo blanco profesional
+            logging: false,
+            width: 740,  // Ancho con bordes
+            height: Math.max(1000, filteredEntries.length * 20 + 250),  // Altura dinámica
+            scrollX: 0,
+            scrollY: 0,
+            allowTaint: true,
+            useCORS: true,
+            letterRendering: true
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jspdf.jsPDF('p', 'mm', 'a4');  // 'p' = portrait (vertical)
+        
+        const imgWidth = 210;  // Ancho de página A4 en vertical
+        const pageHeight = 297;  // Alto de página A4 en vertical
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+        
+        // Agregar la primera página
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+        
+        // Agregar páginas adicionales si es necesario
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+        
+        // Generar nombre de archivo con fecha
+        const fechaArchivo = new Date().toISOString().split('T')[0];
+        const nombreArchivo = `bitacora_${fechaArchivo}.pdf`;
+        
+        // Descargar el PDF
+        pdf.save(nombreArchivo);
+        
+        // Limpiar
+        document.body.removeChild(pdfContainer);
+        
+        showNotification('✅ PDF generado exitosamente', 'success');
+        
+    } catch (error) {
+        console.error('Error al generar PDF:', error);
+        showNotification('❌ Error al generar PDF', 'error');
+    }
 }
 
 // Iniciar

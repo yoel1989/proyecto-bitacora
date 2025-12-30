@@ -6,9 +6,15 @@
     <title>Bitácora de Obra</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.error('Error cargando jsPDF')"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" onerror="console.error('Error cargando html2canvas')"></script>
     <script src="config.js"></script>
+    <script>
+        // Verificar que Supabase esté disponible
+        if (typeof supabaseClient === 'undefined') {
+            console.error('Error: supabaseClient no está disponible. Verifica que config.js se cargue correctamente.');
+        }
+    </script>
 </head>
 <body>
     <div id="app">
@@ -19,7 +25,7 @@
                 <form id="loginForm">
                     <input type="email" id="email" placeholder="Correo electrónico" required>
                     <input type="password" id="password" placeholder="Contraseña" required>
-                    <button type="submit">Ingresar</button>
+                    <button type="submit" id="loginBtn">Ingresar</button>
                 </form>
                 <p id="loginError" class="error"></p>
             </div>
@@ -32,6 +38,9 @@
                 <div class="user-info">
                     <span id="userName"></span>
                     <span id="userRole"></span>
+                    <div class="notification-indicator">
+                        <span id="notificationBadge" class="notification-badge" style="display: none;">🔔</span>
+                    </div>
                     <button id="logoutBtn">Salir</button>
                 </div>
             </header>
@@ -45,33 +54,33 @@
                     </div>
                     <form id="bitacoraForm">
                         <div class="form-group">
-                            <label>Fecha y Hora:</label>
+                            <label>Fecha y Hora: <span class="required">*</span></label>
                             <input type="datetime-local" id="fecha" required>
                         </div>
                         
                         <div class="form-group">
-                            <label>Título:</label>
-                            <textarea id="titulo" required placeholder="Ingrese el título..." rows="1"></textarea>
+                            <label>Título: <span class="required">*</span></label>
+                            <textarea id="titulo" required placeholder="Ingrese el título (mínimo 5 caracteres)..." rows="1"></textarea>
                         </div>
                         
                         <div class="form-group">
-                            <label>Descripción:</label>
-                            <textarea id="descripcion"></textarea>
+                            <label>Descripción: <span class="required">*</span></label>
+                            <textarea id="descripcion" required placeholder="Ingrese una descripción detallada (mínimo 10 caracteres)..." rows="1"></textarea>
                         </div>
                         
                         <div class="form-group">
-                            <label>Hora Inicio:</label>
-                            <input type="time" id="horaInicio">
+                            <label>Hora Inicio: <span class="required">*</span></label>
+                            <input type="time" id="horaInicio" required>
                         </div>
                         
                         <div class="form-group">
-                            <label>Hora Final:</label>
-                            <input type="time" id="horaFinal">
+                            <label>Hora Final: <span class="required">*</span></label>
+                            <input type="time" id="horaFinal" required>
                         </div>
                         
                         <div class="form-group">
-                            <label>Tipo de Nota:</label>
-                            <select id="tipoNota">
+                            <label>Tipo de Nota: <span class="required">*</span></label>
+                            <select id="tipoNota" required>
                                 <option value="">Seleccionar tipo</option>
                                 <option value="avance">Avance</option>
                                 <option value="incidente">Incidente</option>
@@ -84,13 +93,13 @@
                         </div>
                         
                         <div class="form-group">
-                            <label>Ubicación:</label>
-                            <textarea id="ubicacion" placeholder="Ingrese la ubicación..." rows="1"></textarea>
+                            <label>Ubicación: <span class="required">*</span></label>
+                            <textarea id="ubicacion" required placeholder="Ingrese la ubicación específica (mínimo 3 caracteres)..." rows="1"></textarea>
                         </div>
                         
                         <div class="form-group">
-                            <label>Estado:</label>
-                            <select id="estado">
+                            <label>Estado: <span class="required">*</span></label>
+                            <select id="estado" required>
                                 <option value="pendiente">Pendiente</option>
                                 <option value="en_progreso">En Progreso</option>
                                 <option value="completado">Completado</option>
@@ -169,6 +178,25 @@
                         <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
                     </div>
                 </div>
+                    
+                    <!-- Info de paginación -->
+                    <div class="pagination-info" id="paginationInfo" style="text-align: center; margin: 1rem 0; color: #666; font-size: 0.9rem;">
+                        Cargando entradas...
+                    </div>
+                    
+                    <!-- Loader -->
+                    <div class="entries-loader" id="entriesLoader" style="text-align: center; margin: 1rem 0; display: none;">
+                        <div class="loader-spinner"></div>
+                        <p>Cargando más entradas...</p>
+                    </div>
+                    
+                    <!-- Botón cargar más -->
+                    <div class="load-more-container" style="text-align: center; margin: 1rem 0;">
+                        <button id="loadMoreBtn" class="load-more-btn" style="display: none;">
+                            📄 Cargar más entradas
+                        </button>
+                    </div>
+                    
                     <div id="entriesList"></div>
                 </section>
             </main>

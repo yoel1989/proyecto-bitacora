@@ -14,6 +14,11 @@ body {
   overflow-y: auto;
 }
 
+/* Prevenir overflow horizontal en zoom */
+body {
+  overflow-x: hidden;
+}
+
 /* Meta viewport para móviles */
 @viewport {
   width: device-width;
@@ -117,6 +122,38 @@ header {
   gap: 1rem;
 }
 
+.notification-indicator {
+  position: relative;
+}
+
+.notification-badge {
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.notification-badge:hover {
+  transform: scale(1.1);
+}
+
+.notification-badge::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #e74c3c;
+  border-radius: 50%;
+  display: none;
+}
+
+.notification-badge.has-notifications::after {
+  display: block;
+  animation: pulse 2s infinite;
+}
+
 #logoutBtn {
   background: #e74c3c;
   color: white;
@@ -127,9 +164,9 @@ header {
 }
 
 main {
-  padding: 2.5rem 1rem;
+  padding: 2rem 0.5rem;
   max-width: 100%;
-  margin: 0 auto;
+  margin: 0;
   position: relative;
   width: 100%;
   box-sizing: border-box;
@@ -137,10 +174,21 @@ main {
   overflow-y: visible;
 }
 
+/* Fix para main en zoom 90% - pegado a la izquierda */
+@media screen and (max-width: 1280px) and (min-width: 1025px) {
+  main {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 2rem 0.25rem;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
 /* Form Section */
 .form-section {
   background: white;
-  padding: 2.5rem 1.5rem;
+  padding: 2rem 1rem;
   border-radius: 16px;
   margin-bottom: 2.5rem;
   margin-left: 0;
@@ -154,6 +202,24 @@ main {
   position: relative;
   scroll-margin-top: 20px;
   overflow: hidden;
+}
+
+/* Fix específico para zoom 90% - pegado a la izquierda */
+@media screen and (max-width: 1280px) and (min-width: 1025px) {
+  .form-section {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 2rem 0.5rem;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 .form-group {
@@ -173,13 +239,24 @@ main {
 .form-group select {
   width: 100%;
   max-width: 100%;
-  padding: 0.75rem;
+  padding: 0.5rem;
   border: 2px solid #e0e6ed;
   border-radius: 8px;
   font-size: 1rem;
   transition: all 0.3s ease;
   background: rgba(255, 255, 255, 0.9);
   box-sizing: border-box;
+}
+
+/* Fix para inputs en zoom 90% */
+@media screen and (max-width: 1280px) and (min-width: 1025px) {
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 0.5rem;
+  }
 }
 
 .form-group input:focus,
@@ -196,8 +273,11 @@ main {
 }
 
 .form-group textarea {
-  height: 150px;
-  resize: vertical;
+  height: auto;
+  min-height: 44px;
+  max-height: 200px;
+  resize: none;
+  overflow-y: auto;
 }
 
 /* Título y ubicación - ajuste vertical para móvil */
@@ -209,6 +289,7 @@ main {
   max-width: 100% !important;
   height: auto !important;
   min-height: 44px !important;
+  max-height: 200px !important; /* Límite máximo para evitar que se rompa */
   resize: none !important;
   white-space: normal !important;
   word-wrap: break-word !important;
@@ -217,20 +298,73 @@ main {
   padding: 0.5rem !important;
   line-height: 1.2 !important;
   box-sizing: border-box !important;
+  transition: height 0.2s ease !important;
 }
 
-/* Para desktop mantener comportamiento normal */
+/* Estados especiales para textareas */
+#titulo:focus,
+#ubicacion:focus,
+#descripcion:focus {
+  overflow-y: auto !important;
+  max-height: 200px !important;
+}
+
+/* Scroll personalizado para textareas */
+#titulo::-webkit-scrollbar,
+#ubicacion::-webkit-scrollbar,
+#descripcion::-webkit-scrollbar {
+  width: 6px;
+}
+
+#titulo::-webkit-scrollbar-track,
+#ubicacion::-webkit-scrollbar-track,
+#descripcion::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+#titulo::-webkit-scrollbar-thumb,
+#ubicacion::-webkit-scrollbar-thumb,
+#descripcion::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+#titulo::-webkit-scrollbar-thumb:hover,
+#ubicacion::-webkit-scrollbar-thumb:hover,
+#descripcion::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Para desktop mantener comportamiento consistente */
 @media (min-width: 769px) {
   #titulo {
-    height: 44px;
+    min-height: 44px;
+    max-height: 200px;
     resize: none;
-    white-space: nowrap;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-y: auto;
     overflow-x: hidden;
   }
   
   #ubicacion {
     height: auto;
     min-height: 44px;
+    max-height: 200px;
+    resize: none;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  #descripcion {
+    height: auto;
+    min-height: 44px;
+    max-height: 200px;
     resize: none;
     white-space: normal;
     word-wrap: break-word;
@@ -469,7 +603,7 @@ main {
 /* Entries Section */
 .entries-section {
   background: white;
-  padding: 2.5rem;
+  padding: 2rem 0.5rem;
   border-radius: 16px;
   margin-bottom: 2.5rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
@@ -478,6 +612,8 @@ main {
   width: 100%;
   box-sizing: border-box;
   position: relative;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .section-header {
@@ -669,13 +805,15 @@ main {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  table-layout: fixed;
 }
 
 .excel-table th,
 .excel-table td {
   border: 1px solid #e8ecf1;
-  padding: 12px;
+  padding: 8px;
   text-align: left;
+  overflow: hidden;
 }
 
 .excel-table th {
@@ -705,9 +843,8 @@ main {
   white-space: normal;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  max-width: 500px;
-  min-width: 200px;
-  position: relative;
+  width: auto;
+  max-width: 300px;
 }
 
 .archivos-container {
@@ -729,6 +866,8 @@ main {
   border-radius: 4px;
   cursor: pointer;
   transition: transform 0.2s;
+  position: relative;
+  z-index: 1;
 }
 
 .mini-photo:hover {
@@ -1485,6 +1624,8 @@ main {
   border: 2px solid #667eea;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
+  z-index: 1;
 }
 
 .mobile-foto:hover {
@@ -1599,6 +1740,7 @@ main {
 .excel-table td {
   padding: 6px 4px;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .excel-table td:nth-child(2),
@@ -1613,23 +1755,23 @@ main {
 }
 
 .excel-table td:nth-child(2) { /* Título */
-  max-width: 180px;
-  min-width: 100px;
+  max-width: 150px;
+  min-width: 80px;
 }
 
 .excel-table td:nth-child(3) { /* Descripción */
-  max-width: 250px;
-  min-width: 180px;
+  max-width: 200px;
+  min-width: 120px;
 }
 
 .excel-table td:nth-child(4) { /* Ubicación */
-  max-width: 180px;
-  min-width: 100px;
+  max-width: 150px;
+  min-width: 80px;
 }
 
 .excel-table td:nth-child(6) { /* Usuario */
-  max-width: 150px;
-  min-width: 100px;
+  max-width: 120px;
+  min-width: 80px;
   word-break: break-all;
 }
 
@@ -1802,4 +1944,459 @@ main {
   padding: 0.5rem !important;
   line-height: 1.2 !important;
   box-sizing: border-box !important;
+}
+
+/* Lazy loading y optimizaciones de rendimiento */
+.lazy-image {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.lazy-image.loaded {
+  opacity: 1;
+}
+
+.image-placeholder, .mini-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border: 2px dashed #ddd;
+  border-radius: 4px;
+  font-size: 1.2rem;
+  color: #999;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.mini-image-placeholder {
+  font-size: 0.8rem;
+  width: 45px;
+  height: 35px;
+}
+
+.mobile-foto-container {
+  position: relative;
+  width: 45px;
+  height: 45px;
+}
+
+.mini-photo-container {
+  position: relative;
+  width: 45px;
+  height: 35px;
+}
+
+/* Paginación y loading */
+.pagination-info {
+  text-align: center;
+  margin: 1rem 0;
+  color: #666;
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.counter-total {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-left: 0.5rem;
+}
+
+.entries-loader {
+  text-align: center;
+  margin: 1rem 0;
+  padding: 1rem;
+}
+
+.loader-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 0.5rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.load-more-btn {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.load-more-btn:hover {
+  background: linear-gradient(135deg, #5a6fd8, #6a5acd);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+}
+
+/* Additional zoom optimizations for desktop browsers */
+@media screen and (min-width: 769px) {
+  /* Chrome/Safari zoom fixes */
+  .form-section {
+    max-width: calc(100vw - 2rem) !important;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  /* Firefox zoom fixes */
+  @supports (-moz-appearance: none) {
+    .form-section {
+      max-width: calc(100vw - 2rem) !important;
+    }
+  }
+  
+  /* Edge zoom fixes */
+  @supports (-ms-ime-align: auto) {
+    .form-section {
+      max-width: calc(100vw - 2rem) !important;
+    }
+  }
+}
+
+/* 90% Zoom Specific Fixes */
+@media screen and (max-width: 1440px) and (min-width: 1200px) {
+  main {
+    width: calc(100vw - 1rem) !important;
+    max-width: calc(100vw - 1rem) !important;
+    padding: 1.5rem 0.5rem !important;
+  }
+  
+  .form-section {
+    max-width: calc(100vw - 1rem) !important;
+    padding: 1.5rem 0.75rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+  
+  .form-group {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    max-width: 100% !important;
+    min-width: 200px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* Zoom level specific fixes */
+@media screen and (max-width: 1280px) and (min-width: 1024px) {
+  /* 90% zoom fixes */
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    font-size: 0.9rem;
+    padding: 0.65rem;
+  }
+  
+  .form-section {
+    padding: 2rem 1.25rem;
+  }
+}
+
+@media screen and (max-width: 1152px) and (min-width: 1024px) {
+  /* 80% zoom fixes */
+  .form-group input,
+  .form-group textarea,
+  .form-group select {
+    font-size: 0.85rem;
+    padding: 0.6rem;
+  }
+  
+  .form-section {
+    padding: 1.75rem 1rem;
+  }
+}
+
+/* Container overflow prevention - AGGRESSIVE */
+.container-wrapper {
+  overflow-x: hidden;
+  width: 100vw;
+  max-width: 100vw;
+  min-width: 320px;
+  position: relative;
+}
+
+body {
+  overflow-x: hidden !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+}
+
+html {
+  overflow-x: hidden !important;
+}
+
+/* Form overflow fixes - AGGRESSIVE */
+#bitacoraForm {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.form-grid {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.form-group {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  padding: 0;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: calc(100% - 0.5rem) !important;
+  max-width: calc(100% - 0.5rem) !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+  border: 1px solid #e0e6ed !important;
+  margin: 0;
+  padding: 0.5rem !important;
+  font-size: 0.9rem !important;
+}
+
+/* Flexible grid for form elements - SIMPLIFIED */
+.form-grid {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.form-group {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+/* Simplified layout - single column always */
+@media screen and (min-width: 768px) {
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .form-group {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  
+  .form-group.full-width {
+    grid-column: 1 / -1;
+    width: 100% !important;
+  }
+}
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Skeleton loading */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Validación de campos obligatorios */
+.required {
+  color: #e74c3c;
+  font-weight: bold;
+  margin-left: 4px;
+}
+
+/* Errores de validación */
+.validation-error-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  animation: fadeIn 0.3s ease;
+}
+
+.validation-error-content {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+.validation-error-header {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  padding: 1.5rem;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.validation-error-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.validation-error-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  width: 35px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.validation-error-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.validation-error-list {
+  padding: 1.5rem;
+  background: #f8f9fa;
+}
+
+.validation-error-item {
+  padding: 0.75rem;
+  margin: 0.5rem 0;
+  background: white;
+  border-left: 4px solid #e74c3c;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  animation: slideInLeft 0.3s ease;
+}
+
+.validation-error-actions {
+  padding: 1.5rem;
+  text-align: center;
+  border-top: 1px solid #e0e0e0;
+}
+
+.validation-error-ok {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  padding: 0.75rem 2rem;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.validation-error-ok:hover {
+  background: linear-gradient(135deg, #5a6fd8, #6a5acd);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* Resaltar campos con errores */
+.form-group.validation-error {
+  animation: shakeError 0.5s ease;
+}
+
+.form-group.validation-error label {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.form-group.validation-error input,
+.form-group.validation-error textarea,
+.form-group.validation-error select {
+  border-color: #e74c3c;
+  border-width: 3px;
+  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
+  background: #fff5f5;
+}
+
+.form-group.validation-error input:focus,
+.form-group.validation-error textarea:focus,
+.form-group.validation-error select:focus {
+  border-color: #c0392b;
+  box-shadow: 0 0 0 3px rgba(192, 60, 43, 0.2);
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shakeError {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
 }

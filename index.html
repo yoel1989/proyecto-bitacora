@@ -8,12 +8,18 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.error('Error cargando jsPDF')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" onerror="console.error('Error cargando html2canvas')"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script src="config.js"></script>
     <script>
         // Verificar que Supabase esté disponible
         if (typeof supabaseClient === 'undefined') {
             console.error('Error: supabaseClient no está disponible. Verifica que config.js se cargue correctamente.');
         }
+        
+        // Inicializar EmailJS
+        (function() {
+            emailjs.init("tu_public_key"); // Reemplazar con tu Public Key
+        })();
     </script>
 </head>
 <body>

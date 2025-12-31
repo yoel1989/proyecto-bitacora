@@ -2257,8 +2257,9 @@ async function downloadPDF() {
         const fechaArchivo = new Date().toISOString().split('T')[0];
         const nombreArchivo = `bitacora_${fechaArchivo}.pdf`;
         
-        // Descargar el PDF
+        // Descargar el PDF - método alternativo para evitar errores
         try {
+            // Método 1: Intentar guardar directamente
             pdf.save(nombreArchivo);
             console.log('✅ PDF guardado exitosamente como:', nombreArchivo);
             
@@ -2271,12 +2272,75 @@ async function downloadPDF() {
             }
             pdfContainer = null;
             
-            showNotification('✅ PDF generado exitosamente', 'success');
+            showNotification('✅ PDF generado y descargado exitosamente', 'success');
             
         } catch (saveError) {
-            console.error('Error al guardar PDF:', saveError);
-            // El PDF se generó pero no se pudo guardar - aún así es un éxito parcial
-            showNotification('⚠️ PDF generado pero hubo un error al guardarlo', 'warning');
+            console.error('Error al guardar PDF con pdf.save():', saveError);
+            
+            // Método 2: Alternativa usando blob y descarga manual
+            try {
+                console.log('🔄 Intentando método alternativo de descarga...');
+                
+                // Convertir PDF a blob
+                const pdfBlob = pdf.output('blob');
+                
+                // Crear URL temporal
+                const blobUrl = URL.createObjectURL(pdfBlob);
+                
+                // Crear enlace de descarga
+                const downloadLink = document.createElement('a');
+                downloadLink.href = blobUrl;
+                downloadLink.download = nombreArchivo;
+                downloadLink.style.display = 'none';
+                
+                // Agregar al DOM, hacer clic y limpiar
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                
+                // Esperar un poco antes de limpiar
+                setTimeout(() => {
+                    document.body.removeChild(downloadLink);
+                    URL.revokeObjectURL(blobUrl);
+                }, 100);
+                
+                console.log('✅ PDF descargado con método alternativo');
+                
+                // Limpiar referencias
+                if (pdfContainer && pdfContainer.parentNode) {
+                    pdfContainer.parentNode.removeChild(pdfContainer);
+                }
+                pdfContainer = null;
+                
+                showNotification('✅ PDF generado y descargado exitosamente', 'success');
+                
+            } catch (alternativeError) {
+                console.error('Error también con método alternativo:', alternativeError);
+                
+                // Método 3: Abrir en nueva pestaña como último recurso
+                try {
+                    console.log('🔄 Intentando abrir en nueva pestaña...');
+                    
+                    const pdfDataUri = pdf.output('datauristring');
+                    const newWindow = window.open(pdfDataUri, '_blank');
+                    
+                    if (newWindow) {
+                        console.log('✅ PDF abierto en nueva pestaña');
+                        showNotification('📄 PDF abierto en nueva pestaña - guarda manualmente', 'info');
+                    } else {
+                        throw new Error('No se pudo abrir nueva pestaña');
+                    }
+                    
+                } catch (finalError) {
+                    console.error('Error con todos los métodos:', finalError);
+                    showNotification('❌ No se pudo descargar el PDF - intenta de nuevo', 'error');
+                }
+                
+                // Limpiar referencias en todos los casos
+                if (pdfContainer && pdfContainer.parentNode) {
+                    pdfContainer.parentNode.removeChild(pdfContainer);
+                }
+                pdfContainer = null;
+            }
         }
         
     } catch (error) {

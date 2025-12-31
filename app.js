@@ -2210,19 +2210,27 @@ async function downloadPDF() {
         await new Promise(resolve => setTimeout(resolve, 100));
         
         // Generar PDF usando html2canvas y jsPDF - orientación vertical
-        const canvas = await html2canvas(pdfContainer, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',  // Fondo blanco profesional
-            logging: false,
-            width: 740,  // Ancho con bordes
-            height: Math.max(1000, filteredEntries.length * 20 + 250),  // Altura dinámica
-            scrollX: 0,
-            scrollY: 0,
-            allowTaint: true,
-            useCORS: true,
-            letterRendering: true
-        });
+        let canvas;
+        try {
+            canvas = await html2canvas(pdfContainer, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',  // Fondo blanco profesional
+                logging: false,
+                width: 740,  // Ancho con bordes
+                height: Math.max(1000, filteredEntries.length * 20 + 250),  // Altura dinámica
+                scrollX: 0,
+                scrollY: 0,
+                allowTaint: true,
+                useCORS: true,
+                letterRendering: true,
+                timeout: 10000  // Timeout de 10 segundos
+            });
+            console.log('✅ Canvas generado exitosamente');
+        } catch (canvasError) {
+            console.error('Error generando canvas:', canvasError);
+            throw new Error('Error al generar la imagen del PDF: ' + canvasError.message);
+        }
         
         const imgData = canvas.toDataURL('image/png');
         const pdf = new jspdf.jsPDF('p', 'mm', 'a4');  // 'p' = portrait (vertical)
@@ -2250,19 +2258,43 @@ async function downloadPDF() {
         const nombreArchivo = `bitacora_${fechaArchivo}.pdf`;
         
         // Descargar el PDF
-        pdf.save(nombreArchivo);
-        
-        // Limpiar referencias para evitar memory leaks
-        if (pdfContainer && pdfContainer.parentNode) {
-            pdfContainer.parentNode.removeChild(pdfContainer);
+        try {
+            pdf.save(nombreArchivo);
+            console.log('✅ PDF guardado exitosamente como:', nombreArchivo);
+            
+            // Pequeña espera para asegurar que el archivo se guarde
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // Limpiar referencias para evitar memory leaks
+            if (pdfContainer && pdfContainer.parentNode) {
+                pdfContainer.parentNode.removeChild(pdfContainer);
+            }
+            pdfContainer = null;
+            
+            showNotification('✅ PDF generado exitosamente', 'success');
+            
+        } catch (saveError) {
+            console.error('Error al guardar PDF:', saveError);
+            // El PDF se generó pero no se pudo guardar - aún así es un éxito parcial
+            showNotification('⚠️ PDF generado pero hubo un error al guardarlo', 'warning');
         }
-        pdfContainer = null;
-        
-        showNotification('✅ PDF generado exitosamente', 'success');
         
     } catch (error) {
         console.error('Error al generar PDF:', error);
-        showNotification('❌ Error al generar PDF', 'error');
+        console.error('Detalles del error:', error.message, error.stack);
+        
+        // Verificar si el error es crítico o solo una advertencia
+        if (error.message && error.message.includes('PDF generado exitosamente')) {
+            // Si el PDF se generó pero hay un error menor, no mostrar error
+            showNotification('✅ PDF generado exitosamente', 'success');
+        } else {
+            showNotification('❌ Error al generar PDF: ' + (error.message || 'Error desconocido'), 'error');
+        }
+        
+        // Limpiar el contenedor si existe
+        if (typeof pdfContainer !== 'undefined' && pdfContainer && pdfContainer.parentNode) {
+            pdfContainer.parentNode.removeChild(pdfContainer);
+        }
     }
 }
 

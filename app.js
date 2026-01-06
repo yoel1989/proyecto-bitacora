@@ -10,6 +10,8 @@ let currentPage = 1;
 const ENTRIES_PER_PAGE = 50;
 let isLoadingEntries = false;
 let totalEntries = 0;
+let commentFiles = []; // Archivos para el comentario principal
+let replyFiles = {}; // Archivos para respuestas (key: commentId)
 
 // Sistema de notificaciones en tiempo real
 let notificationSubscription = null;
@@ -821,6 +823,65 @@ function hideLoadingIndicator() {
     }
 }
 
+// Función para contar comentarios de una entrada
+async function countComments(bitacoraId) {
+    try {
+        const { count, error } = await supabaseClient
+            .from('comentarios')
+            .select('*', { count: 'exact', head: true })
+            .eq('bitacora_id', bitacoraId);
+        
+        if (error) {
+            console.error('Error contando comentarios:', error);
+            return 0;
+        }
+        
+        return count || 0;
+    } catch (error) {
+        console.error('Error inesperado contando comentarios:', error);
+        return 0;
+    }
+}
+
+// Función para actualizar contadores de comentarios en los botones
+async function updateCommentCounts(entries) {
+    try {
+        // Actualizar contadores para todas las entradas
+        const entriesWithCounts = await Promise.all(
+            entries.map(async (entry) => {
+                const commentCount = await countComments(entry.id);
+                return { ...entry, commentCount };
+            })
+        );
+        
+        // Actualizar los botones en el DOM
+        entriesWithCounts.forEach(entry => {
+            // Actualizar botones en versión desktop (tabla)
+            const desktopButtons = document.querySelectorAll(`.comments-btn[onclick*="${entry.id}"]`);
+            desktopButtons.forEach(btn => {
+                const countSpan = btn.querySelector('.comment-count');
+                if (countSpan) {
+                    countSpan.textContent = entry.commentCount;
+                    countSpan.style.display = entry.commentCount > 0 ? 'inline-block' : 'none';
+                }
+            });
+            
+            // Actualizar botones en versión móvil (cards)
+            const mobileButtons = document.querySelectorAll(`.mobile-comments-btn[onclick*="${entry.id}"]`);
+            mobileButtons.forEach(btn => {
+                const countSpan = btn.querySelector('.comment-count');
+                if (countSpan) {
+                    countSpan.textContent = entry.commentCount;
+                    countSpan.style.display = entry.commentCount > 0 ? 'inline-block' : 'none';
+                }
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error actualizando contadores de comentarios:', error);
+    }
+}
+
 // Cargar más entradas (paginación infinita)
 async function loadMoreEntries() {
     if (isLoadingEntries || allEntries.length >= totalEntries) return;
@@ -924,20 +985,25 @@ function createMobileEntryCard(entry) {
     // Botones de acción según rol
     let actionButtons = '';
     
+    // Botón de comentarios (siempre visible para todos los usuarios autenticados)
+    actionButtons += `
+        <button class="mobile-action-btn mobile-comments-btn" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
+            💬 Comentar <span class="comment-count">0</span>
+        </button>
+    `;
+    
     // Admin puede editar y eliminar cualquier entrada
     if (currentUser.role === 'admin') {
-        actionButtons = `
-            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+        actionButtons += `
+            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
+            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
         `;
     } 
     // Otros roles (interventoria, supervision, ordenador_gasto, contratista) solo pueden editar sus propias entradas
     else if (entry.user_id === currentUser.id) {
-        actionButtons = `
-            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+        actionButtons += `
+            <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
         `;
-    } else {
-        actionButtons = '<span class="no-delete">-</span>';
     }
     
     card.innerHTML = `
@@ -1075,20 +1141,25 @@ function createDesktopTable(entries) {
         // Botones de acción según rol
         let actionButtons = '';
         
+        // Botón de comentarios (siempre visible para todos los usuarios autenticados)
+        actionButtons += `
+            <button class="comments-btn" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
+                💬 Comentar <span class="comment-count">0</span>
+            </button>
+        `;
+        
         // Admin puede editar y eliminar cualquier entrada
         if (currentUser.role === 'admin') {
-            actionButtons = `
-                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
-                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️</button>
+            actionButtons += `
+                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
+                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
             `;
         } 
         // Otros roles (interventoria, supervision, ordenador_gasto, contratista) solo pueden editar sus propias entradas
         else if (entry.user_id === currentUser.id) {
-            actionButtons = `
-                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️</button>
+            actionButtons += `
+                <button class="edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
             `;
-        } else {
-            actionButtons = '<span class="no-delete">-</span>';
         }
         
         // Formatear fecha directamente desde datetime-local
@@ -2000,6 +2071,833 @@ async function generarFolioConsecutivo(resetear = false) {
     }
 }
 
+// ===== SISTEMA DE COMENTARIOS =====
+
+let currentBitacoraId = null;
+let commentsSubscription = null;
+
+// Abrir modal de comentarios
+function openCommentsModal(bitacoraId) {
+    currentBitacoraId = bitacoraId;
+    
+    // Mostrar información del usuario actual
+    const commentUserName = document.getElementById('commentUserName');
+    commentUserName.textContent = currentUser.email || 'Usuario';
+    
+    // Limpiar textarea
+    document.getElementById('newComment').value = '';
+    
+    // Mostrar modal
+    const modal = document.getElementById('commentsModal');
+    modal.style.display = 'flex';
+    
+    // Cargar comentarios (usar versión simple temporalmente para debug)
+    loadComments(bitacoraId);
+    
+    // Suscribirse a cambios en tiempo real de comentarios
+    subscribeToComments(bitacoraId);
+}
+
+// Cerrar modal de comentarios
+function closeCommentsModal() {
+    const modal = document.getElementById('commentsModal');
+    modal.style.display = 'none';
+    
+    // Limpiar suscripción
+    if (commentsSubscription) {
+        supabaseClient.removeChannel(commentsSubscription);
+        commentsSubscription = null;
+    }
+    
+    currentBitacoraId = null;
+}
+
+// Cargar comentarios de una entrada (versión simplificada)
+async function loadComments(bitacoraId) {
+    try {
+        console.log('🔍 Cargando comentarios para bitácora:', bitacoraId);
+        
+        // Cargar todos los comentarios de esta bitácora
+        const { data: allComments, error: commentsError } = await supabaseClient
+            .from('comentarios')
+            .select('*')
+            .eq('bitacora_id', bitacoraId)
+            .order('created_at', { ascending: true });
+        
+        if (commentsError) {
+            console.error('Error cargando comentarios:', commentsError);
+            showNotification('❌ Error al cargar los comentarios: ' + commentsError.message, 'error');
+            return;
+        }
+        
+        // Si no hay comentarios, mostrar mensaje y salir
+        if (!allComments || allComments.length === 0) {
+            displayComments([]);
+            return;
+        }
+        
+        // Separar comentarios principales y respuestas
+        const mainComments = allComments.filter(c => !c.parent_comment_id);
+        const replies = allComments.filter(c => c.parent_comment_id);
+        
+        // Agrupar respuestas por comentario padre
+        const repliesByParent = {};
+        replies.forEach(reply => {
+            if (!repliesByParent[reply.parent_comment_id]) {
+                repliesByParent[reply.parent_comment_id] = [];
+            }
+            repliesByParent[reply.parent_comment_id].push(reply);
+        });
+        
+        // Combinar comentarios con sus respuestas
+        const commentsWithReplies = mainComments.map(comment => ({
+            ...comment,
+            replies: repliesByParent[comment.id] || []
+        }));
+        
+        // Obtener todos los IDs de usuarios (comentarios y respuestas)
+        const userIds = [...new Set(allComments.map(c => c.user_id))];
+        
+        // Obtener perfiles de todos los usuarios
+        const { data: profiles, error: profilesError } = await supabaseClient
+            .from('profiles')
+            .select('id, email, rol')
+            .in('id', userIds);
+        
+        if (profilesError) {
+            console.error('Error cargando perfiles:', profilesError);
+            // Mostrar comentarios sin perfiles si hay error
+            const commentsWithoutProfiles = commentsWithReplies.map(comment => ({
+                ...comment,
+                profiles: null,
+                replies: comment.replies.map(reply => ({ ...reply, profiles: null }))
+            }));
+            displayComments(commentsWithoutProfiles);
+            return;
+        }
+        
+        // Combinar comentarios y respuestas con sus perfiles
+        const commentsWithProfiles = commentsWithReplies.map(comment => ({
+            ...comment,
+            profiles: profiles.find(p => p.id === comment.user_id) || null,
+            replies: comment.replies.map(reply => ({
+                ...reply,
+                profiles: profiles.find(p => p.id === reply.user_id) || null
+            }))
+        }));
+        
+        console.log('🔍 Respuesta comentarios con perfiles y respuestas:', commentsWithProfiles);
+        displayComments(commentsWithProfiles);
+        
+    } catch (error) {
+        console.error('Error inesperado cargando comentarios:', error);
+        showNotification('❌ Error al cargar los comentarios', 'error');
+    }
+}
+
+// Mostrar comentarios en el modal
+function displayComments(comments) {
+    const commentsList = document.getElementById('commentsList');
+    
+    console.log('🔍 Mostrando comentarios:', comments);
+    
+    if (!comments || comments.length === 0) {
+        commentsList.innerHTML = '<p class="no-comments">Aún no hay comentarios. ¡Sé el primero en comentar!</p>';
+        console.log('🔍 No hay comentarios para mostrar');
+        return;
+    }
+    
+    console.log('🔍 Procesando', comments.length, 'comentarios');
+    
+    let commentsHtml = '';
+    comments.forEach(comment => {
+        console.log('🔍 Procesando comentario:', comment);
+        
+        const userEmail = comment.profiles?.email || 'Usuario desconocido';
+        const userRole = comment.profiles?.rol || 'desconocido';
+        const isOwnComment = comment.user_id === currentUser.id;
+        const isAdmin = currentUser.role === 'admin';
+        
+        // Formatear fecha
+        const commentDate = new Date(comment.created_at);
+        const formattedDate = commentDate.toLocaleString('es-ES', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        commentsHtml += `
+            <div class="comment-item" data-comment-id="${comment.id}">
+                <div class="comment-header">
+                    <div class="comment-user">
+                        <strong>${userEmail}</strong>
+                        <span class="comment-role">(${getRoleDisplayName(userRole)})</span>
+                    </div>
+                    <div class="comment-meta">
+                        <span class="comment-date">${formattedDate}</span>
+                        ${(isOwnComment || isAdmin) ? `
+                            <div class="comment-actions">
+                                ${isOwnComment ? `<button class="comment-edit-btn" onclick="editComment(${comment.id})">✏️</button>` : ''}
+                                ${(isOwnComment || isAdmin) ? `<button class="comment-delete-btn" onclick="deleteComment(${comment.id})">🗑️</button>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="comment-content" id="comment-content-${comment.id}">
+                    ${comment.comentario}
+                </div>
+                
+                <!-- Mostrar archivos adjuntos del comentario -->
+                ${comment.archivos && comment.archivos.length > 0 ? `
+                    <div class="comment-files-list">
+                        <div class="comment-files-header">
+                            📎 ${comment.archivos.length} ${comment.archivos.length === 1 ? 'archivo adjunto' : 'archivos adjuntos'}:
+                        </div>
+                        <div class="comment-files-grid">
+                            ${comment.archivos.map(file => {
+                                const isImage = file.type && file.type.startsWith('image/');
+                                const icon = getFileIcon(file.name);
+                                
+                                return `
+                                    <div class="comment-file-item" onclick="downloadCommentFile('${file.url}', '${file.name}')">
+                                        ${isImage ? 
+                                            `<img src="${file.url}" alt="${file.name}" class="comment-file-thumbnail" />` :
+                                            `<div class="comment-file-icon-large">${icon}</div>`
+                                        }
+                                        <div class="comment-file-info">
+                                            <div class="comment-file-name-display">${file.name}</div>
+                                            <div class="comment-file-size-display">${formatFileSize(file.size)}</div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                <div class="comment-actions-row">
+                    <button class="comment-reply-btn" onclick="replyToComment(${comment.id}, '${userEmail.replace(/'/g, "\\'")}')">
+                        💬 Responder
+                    </button>
+                </div>
+                <div id="reply-section-${comment.id}" class="reply-section" style="display: none;">
+                    <div class="reply-input-container">
+                        <textarea id="reply-textarea-${comment.id}" 
+                                  class="reply-textarea" 
+                                  placeholder="Escribe tu respuesta aquí..." 
+                                  rows="3"></textarea>
+                        
+                        <!-- Sección de archivos para respuestas -->
+                        <div class="comment-files-section">
+                            <div class="comment-files-label-small">
+                                📎 Adjuntar archivos:
+                            </div>
+                            <input type="file" id="reply-files-${comment.id}" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                            <div id="reply-files-preview-${comment.id}" class="comment-files-preview-small" style="display: none;">
+                                <div id="reply-files-preview-grid-${comment.id}" class="comment-files-preview-grid"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="reply-buttons">
+                            <button class="reply-send-btn" onclick="submitReply(${comment.id})">
+                                💬 Enviar Respuesta
+                            </button>
+                            <button class="reply-cancel-btn" onclick="cancelReply(${comment.id})">
+                                ❌ Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mostrar respuestas -->
+                ${comment.replies && comment.replies.length > 0 ? `
+                    <div class="replies-section">
+                        <div class="replies-header">
+                            <strong>${comment.replies.length} ${comment.replies.length === 1 ? 'respuesta' : 'respuestas'}</strong>
+                        </div>
+                        ${comment.replies.map(reply => {
+                            const replyUserEmail = reply.profiles?.email || 'Usuario desconocido';
+                            const replyUserRole = reply.profiles?.rol || 'desconocido';
+                            const isOwnReply = reply.user_id === currentUser.id;
+                            const isAdminReply = currentUser.role === 'admin';
+                            
+                            const replyDate = new Date(reply.created_at);
+                            const formattedReplyDate = replyDate.toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                            
+                            return `
+                                <div class="comment-item reply-item" data-comment-id="${reply.id}">
+                                    <div class="comment-header">
+                                        <div class="comment-user">
+                                            <strong>${replyUserEmail}</strong>
+                                            <span class="comment-role">(${getRoleDisplayName(replyUserRole)})</span>
+                                        </div>
+                                        <div class="comment-meta">
+                                            <span class="comment-date">${formattedReplyDate}</span>
+                                            ${(isOwnReply || isAdminReply) ? `
+                                                <div class="comment-actions">
+                                                    ${isOwnReply ? `<button class="comment-edit-btn" onclick="editComment(${reply.id})">✏️</button>` : ''}
+                                                    ${(isOwnReply || isAdminReply) ? `<button class="comment-delete-btn" onclick="deleteComment(${reply.id})">🗑️</button>` : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                        <div class="comment-content" id="comment-content-${reply.id}">
+                                            ${reply.comentario}
+                                        </div>
+                                        
+                                        <!-- Mostrar archivos adjuntos de la respuesta -->
+                                        ${reply.archivos && reply.archivos.length > 0 ? `
+                                            <div class="comment-files-list-small">
+                                                <div class="comment-files-header-small">
+                                                    📎 ${reply.archivos.length} ${reply.archivos.length === 1 ? 'archivo' : 'archivos'}:
+                                                </div>
+                                                <div class="comment-files-grid-small">
+                                                    ${reply.archivos.map(file => {
+                                                        const isImage = file.type && file.type.startsWith('image/');
+                                                        const icon = getFileIcon(file.name);
+                                                        
+                                                        return `
+                                                            <div class="comment-file-item-small" onclick="downloadCommentFile('${file.url}', '${file.name}')">
+                                                                ${isImage ? 
+                                                                    `<img src="${file.url}" alt="${file.name}" class="comment-file-thumbnail-small" />` :
+                                                                    `<div class="comment-file-icon-small">${icon}</div>`
+                                                                }
+                                                                <div class="comment-file-info-small">
+                                                                    <div class="comment-file-name-display-small">${file.name}</div>
+                                                                    <div class="comment-file-size-display-small">${formatFileSize(file.size)}</div>
+                                                                </div>
+                                                            </div>
+                                                        `;
+                                                    }).join('')}
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+    
+    console.log('🔍 HTML generado:', commentsHtml);
+    commentsList.innerHTML = commentsHtml;
+}
+
+// Manejar selección de archivos para comentarios
+function handleCommentFilesChange(e) {
+    const files = e.target.files;
+    console.log('🔍 Archivos seleccionados:', files);
+    
+    if (files.length > 0) {
+        commentFiles = Array.from(files);
+        displayCommentFilesPreview(files);
+    } else {
+        commentFiles = [];
+        hideCommentFilesPreview();
+    }
+}
+
+// Mostrar vista previa de archivos para comentarios
+function displayCommentFilesPreview(files) {
+    const previewContainer = document.getElementById('commentFilesPreview');
+    const previewGrid = document.getElementById('commentFilesPreviewGrid');
+    
+    if (!previewContainer || !previewGrid) return;
+    
+    let previewHtml = '';
+    Array.from(files).forEach(file => {
+        const isImage = file.type.startsWith('image/');
+        const icon = getFileIcon(file.name);
+        
+        previewHtml += `
+            <div class="comment-file-preview-item">
+                ${isImage ? 
+                    `<img src="${URL.createObjectURL(file)}" alt="${file.name}" />` :
+                    `<div class="comment-file-icon">${icon}</div>`
+                }
+                <div class="comment-file-name">${file.name}</div>
+                <div class="comment-file-size">${formatFileSize(file.size)}</div>
+            </div>
+        `;
+    });
+    
+    previewGrid.innerHTML = previewHtml;
+    previewContainer.style.display = 'block';
+}
+
+// Ocultar vista previa de archivos para comentarios
+function hideCommentFilesPreview() {
+    const previewContainer = document.getElementById('commentFilesPreview');
+    if (previewContainer) {
+        previewContainer.style.display = 'none';
+    }
+}
+
+// Subir archivos al almacenamiento
+async function uploadCommentFiles(files, commentId) {
+    if (!files || files.length === 0) return [];
+    
+    const uploadedFiles = [];
+    
+    for (const file of files) {
+        try {
+            // Generar nombre único
+            const fileExt = file.name.split('.').pop();
+            const fileName = `comentario_${commentId}_${Date.now()}.${fileExt}`;
+            const filePath = `comentarios/${fileName}`;
+            
+            // Subir a Supabase Storage
+            const { data, error } = await supabaseClient.storage
+                .from('comentarios-archivos')
+                .upload(filePath, file);
+            
+            if (error) {
+                console.error('Error subiendo archivo:', error);
+                continue;
+            }
+            
+            // Obtener URL pública
+            const { data: { publicUrl } } = supabaseClient.storage
+                .from('comentarios-archivos')
+                .getPublicUrl(filePath);
+            
+            uploadedFiles.push({
+                name: file.name,
+                size: file.size,
+                type: file.type,
+                url: publicUrl,
+                path: filePath
+            });
+            
+        } catch (error) {
+            console.error('Error procesando archivo:', error);
+        }
+    }
+    
+    return uploadedFiles;
+}
+
+// Enviar nuevo comentario con archivos
+async function submitComment() {
+    const commentText = document.getElementById('newComment').value.trim();
+    
+    console.log('🔍 Enviando comentario:', commentText);
+    console.log('🔍 Bitácora ID:', currentBitacoraId);
+    console.log('🔍 Usuario ID:', currentUser.id);
+    console.log('🔍 Archivos:', commentFiles);
+    
+    if (!commentText) {
+        showNotification('❌ Por favor escribe un comentario', 'error');
+        return;
+    }
+    
+    if (!currentBitacoraId) {
+        showNotification('❌ Error: No se ha seleccionado una entrada', 'error');
+        return;
+    }
+    
+    try {
+        // Primero subir los archivos
+        const uploadedFiles = await uploadCommentFiles(commentFiles);
+        
+        // Luego insertar el comentario con los archivos
+        const { data, error } = await supabaseClient
+            .from('comentarios')
+            .insert({
+                bitacora_id: currentBitacoraId,
+                user_id: currentUser.id,
+                comentario: commentText,
+                archivos: uploadedFiles
+            })
+            .select()
+            .single();
+        
+        console.log('🔍 Respuesta INSERT:', { data, error });
+        
+        if (error) {
+            console.error('Error guardando comentario:', error);
+            showNotification('❌ Error al guardar el comentario: ' + error.message, 'error');
+            return;
+        }
+        
+        // Limpiar textarea y archivos
+        document.getElementById('newComment').value = '';
+        document.getElementById('commentFiles').value = '';
+        commentFiles = [];
+        hideCommentFilesPreview();
+        
+        // Mostrar notificación
+        showNotification('✅ Comentario enviado exitosamente', 'success');
+        
+        // Cargar comentarios manualmente (además del tiempo real)
+        await loadComments(currentBitacoraId);
+        
+    } catch (error) {
+        console.error('Error inesperado guardando comentario:', error);
+        showNotification('❌ Error al guardar el comentario', 'error');
+    }
+}
+
+// Editar comentario
+async function editComment(commentId) {
+    const commentContent = document.getElementById(`comment-content-${commentId}`);
+    const currentText = commentContent.textContent.trim();
+    
+    // Crear textarea para editar
+    const textarea = document.createElement('textarea');
+    textarea.value = currentText;
+    textarea.className = 'comment-edit-textarea';
+    textarea.rows = 3;
+    
+    // Crear botones de acción
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'comment-edit-actions';
+    
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'comment-save-btn';
+    saveBtn.textContent = '💾 Guardar';
+    saveBtn.onclick = () => saveComment(commentId);
+    
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'comment-cancel-btn';
+    cancelBtn.textContent = '❌ Cancelar';
+    cancelBtn.onclick = () => cancelEditComment(commentId);
+    
+    actionsDiv.appendChild(saveBtn);
+    actionsDiv.appendChild(cancelBtn);
+    
+    // Reemplazar contenido con textarea y acciones
+    commentContent.innerHTML = '';
+    commentContent.appendChild(textarea);
+    commentContent.appendChild(actionsDiv);
+    
+    // Enfocar textarea
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+}
+
+// Guardar comentario editado
+async function saveComment(commentId) {
+    console.log('🔍 Guardando comentario ID:', commentId);
+    
+    const commentContent = document.getElementById(`comment-content-${commentId}`);
+    const textarea = commentContent.querySelector('textarea');
+    const newText = textarea.value.trim();
+    
+    console.log('🔍 Nuevo texto:', newText);
+    
+    if (!newText) {
+        showNotification('❌ El comentario no puede estar vacío', 'error');
+        return;
+    }
+    
+    try {
+        console.log('🔍 Enviando UPDATE a Supabase');
+        
+        const { data, error } = await supabaseClient
+            .from('comentarios')
+            .update({ comentario: newText })
+            .eq('id', commentId)
+            .select()
+            .single();
+        
+        console.log('🔍 Respuesta UPDATE:', { data, error });
+        
+        if (error) {
+            console.error('Error actualizando comentario:', error);
+            showNotification('❌ Error al actualizar el comentario: ' + error.message, 'error');
+            return;
+        }
+        
+        showNotification('✅ Comentario actualizado exitosamente', 'success');
+        
+        // Cargar comentarios manualmente para actualizar inmediatamente
+        await loadComments(currentBitacoraId);
+        
+    } catch (error) {
+        console.error('Error inesperado actualizando comentario:', error);
+        showNotification('❌ Error al actualizar el comentario', 'error');
+    }
+}
+
+// Cancelar edición de comentario
+function cancelEditComment(commentId) {
+    // Recargar comentarios para restaurar el estado original
+    loadComments(currentBitacoraId);
+}
+
+// ===== SISTEMA DE RESPUESTAS A COMENTARIOS =====
+
+// Responder a un comentario
+function replyToComment(commentId, authorName) {
+    console.log('🔍 Respondiendo al comentario:', commentId, 'de:', authorName);
+    
+    const replySection = document.getElementById(`reply-section-${commentId}`);
+    const replyTextarea = document.getElementById(`reply-textarea-${commentId}`);
+    
+    // Ocultar otras secciones de respuesta
+    document.querySelectorAll('.reply-section').forEach(section => {
+        if (section.id !== `reply-section-${commentId}`) {
+            section.style.display = 'none';
+        }
+    });
+    
+    // Mostrar la sección de respuesta
+    replySection.style.display = 'block';
+    
+    // Prepend al textarea el nombre del autor
+    replyTextarea.value = `@${authorName} `;
+    replyTextarea.focus();
+    replyTextarea.setSelectionRange(replyTextarea.value.length, replyTextarea.value.length);
+}
+
+// Enviar respuesta
+async function submitReply(parentCommentId) {
+    const replyTextarea = document.getElementById(`reply-textarea-${parentCommentId}`);
+    const replyText = replyTextarea.value.trim();
+    const filesInput = document.getElementById(`reply-files-${parentCommentId}`);
+    const files = filesInput ? filesInput.files : [];
+    
+    if (!replyText) {
+        showNotification('❌ Por favor escribe una respuesta', 'error');
+        return;
+    }
+    
+    if (!currentBitacoraId) {
+        showNotification('❌ Error: No se ha seleccionado una entrada', 'error');
+        return;
+    }
+    
+    console.log('🔍 Enviando respuesta:', { 
+        parentCommentId, 
+        replyText, 
+        files: Array.from(files),
+        currentBitacoraId,
+        userId: currentUser.id 
+    });
+    
+    try {
+        // Primero subir los archivos
+        const uploadedFiles = await uploadCommentFiles(Array.from(files), parentCommentId);
+        
+        // Primero intentar guardar como respuesta (con parent_comment_id)
+        let commentData = {
+            bitacora_id: currentBitacoraId,
+            user_id: currentUser.id,
+            comentario: replyText,
+            parent_comment_id: parentCommentId,
+            archivos: uploadedFiles
+        };
+        
+        console.log('🔍 Datos a insertar (respuesta):', commentData);
+        
+        let { data, error } = await supabaseClient
+            .from('comentarios')
+            .insert(commentData)
+            .select()
+            .single();
+        
+        // Si falla por la columna parent_comment_id, guardar como comentario normal
+        if (error && error.message.includes('column') && error.message.includes('parent_comment_id')) {
+            console.log('🔍 La columna parent_comment_id no existe, guardando como comentario normal');
+            
+            commentData = {
+                bitacora_id: currentBitacoraId,
+                user_id: currentUser.id,
+                comentario: `↳ ${replyText}`,  // Prefijo para indicar que es respuesta
+                archivos: uploadedFiles
+            };
+            
+            console.log('🔍 Datos a insertar (comentario normal):', commentData);
+            
+            const result = await supabaseClient
+                .from('comentarios')
+                .insert(commentData)
+                .select()
+                .single();
+            
+            data = result.data;
+            error = result.error;
+        }
+        
+        console.log('🔍 Respuesta INSERT final:', { data, error });
+        
+        if (error) {
+            console.error('Error guardando respuesta:', error);
+            showNotification('❌ Error al guardar la respuesta: ' + error.message, 'error');
+            return;
+        }
+        
+        // Limpiar y ocultar sección de respuesta
+        replyTextarea.value = '';
+        filesInput.value = '';
+        document.getElementById(`reply-section-${parentCommentId}`).style.display = 'none';
+        
+        // Ocultar vista previa de archivos si existe
+        const filesPreview = document.getElementById(`reply-files-preview-${parentCommentId}`);
+        if (filesPreview) {
+            filesPreview.style.display = 'none';
+        }
+        
+        // Mostrar notificación
+        showNotification('✅ Respuesta enviada exitosamente', 'success');
+        
+        // Cargar comentarios manualmente para actualizar inmediatamente
+        await loadComments(currentBitacoraId);
+        
+    } catch (error) {
+        console.error('Error inesperado guardando respuesta:', error);
+        showNotification('❌ Error al guardar la respuesta', 'error');
+    }
+}
+
+// Cancelar respuesta
+function cancelReply(commentId) {
+    document.getElementById(`reply-section-${commentId}`).style.display = 'none';
+    document.getElementById(`reply-textarea-${commentId}`).value = '';
+}
+
+// Descargar archivo de comentario
+function downloadCommentFile(url, fileName) {
+    console.log('🔍 Descargando archivo:', { url, fileName });
+    
+    // Crear un enlace temporal
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.target = '_blank';
+    
+    // Simular clic para descargar
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    showNotification(`📥 Descargando ${fileName}...`, 'info');
+}
+
+// Event listener para atajos de teclado en respuestas
+document.addEventListener('DOMContentLoaded', function() {
+    // Para respuestas con Ctrl+Enter
+    document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            const replyTextarea = e.target;
+            if (replyTextarea && replyTextarea.id && replyTextarea.id.startsWith('reply-textarea-')) {
+                const commentId = replyTextarea.id.replace('reply-textarea-', '');
+                submitReply(parseInt(commentId));
+            }
+        }
+    });
+});
+
+// Eliminar comentario
+async function deleteComment(commentId) {
+    console.log('🔍 Eliminando comentario ID:', commentId);
+    
+    if (!confirm('⚠️ ¿Estás seguro de que quieres eliminar este comentario?\n\nEsta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        console.log('🔍 Enviando DELETE a Supabase');
+        
+        const { data, error } = await supabaseClient
+            .from('comentarios')
+            .delete()
+            .eq('id', commentId)
+            .select()
+            .single();
+        
+        console.log('🔍 Respuesta DELETE:', { data, error });
+        
+        if (error) {
+            console.error('Error eliminando comentario:', error);
+            showNotification('❌ Error al eliminar el comentario: ' + error.message, 'error');
+            return;
+        }
+        
+        showNotification('✅ Comentario eliminado exitosamente', 'success');
+        
+        // Cargar comentarios manualmente para actualizar inmediatamente
+        await loadComments(currentBitacoraId);
+        
+    } catch (error) {
+        console.error('Error inesperado eliminando comentario:', error);
+        showNotification('❌ Error al eliminar el comentario', 'error');
+    }
+}
+
+// Suscribirse a cambios en tiempo real de comentarios
+function subscribeToComments(bitacoraId) {
+    if (commentsSubscription) {
+        supabaseClient.removeChannel(commentsSubscription);
+    }
+    
+    commentsSubscription = supabaseClient
+        .channel(`comentarios_${bitacoraId}`)
+        .on('postgres_changes',
+            {
+                event: '*',
+                schema: 'public',
+                table: 'comentarios',
+                filter: `bitacora_id=eq.${bitacoraId}`
+            },
+            handleRealtimeComment
+        )
+        .subscribe();
+}
+
+// Manejar cambios en tiempo real de comentarios
+async function handleRealtimeComment(payload) {
+    const { eventType, new: newRecord } = payload;
+    
+    try {
+        if (eventType === 'INSERT') {
+            // Nuevo comentario agregado
+            showNotification('💬 Nuevo comentario agregado', 'info', 2000);
+            await loadComments(currentBitacoraId);
+        } else if (eventType === 'UPDATE') {
+            // Comentario actualizado
+            showNotification('✏️ Comentario actualizado', 'info', 2000);
+            await loadComments(currentBitacoraId);
+        } else if (eventType === 'DELETE') {
+            // Comentario eliminado
+            showNotification('🗑️ Comentario eliminado', 'info', 2000);
+            await loadComments(currentBitacoraId);
+        }
+    } catch (error) {
+        console.error('Error procesando cambio en tiempo real de comentario:', error);
+    }
+}
+
+// Event listener para enviar comentario con Enter
+document.addEventListener('DOMContentLoaded', function() {
+    const newCommentTextarea = document.getElementById('newComment');
+    if (newCommentTextarea) {
+        newCommentTextarea.addEventListener('keydown', function(e) {
+            // Enviar con Ctrl+Enter o Cmd+Enter
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                submitComment();
+            }
+        });
+    }
+    
+    // Event listener para archivos de comentarios principales
+    const commentFilesInput = document.getElementById('commentFiles');
+    if (commentFilesInput) {
+        commentFilesInput.addEventListener('change', handleCommentFilesChange);
+    }
+});
+
 // Función para formatear fechas con zona horaria local
 function formatearFechaLocal(fechaString) {
     if (!fechaString) return 'Fecha no disponible';
@@ -2507,6 +3405,18 @@ function highlightInvalidFields(errors) {
         firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 }
+
+// Hacer funciones disponibles globalmente para onclick
+window.openCommentsModal = openCommentsModal;
+window.closeCommentsModal = closeCommentsModal;
+window.submitComment = submitComment;
+window.editComment = editComment;
+window.saveComment = saveComment;
+window.cancelEditComment = cancelEditComment;
+window.deleteComment = deleteComment;
+window.replyToComment = replyToComment;
+window.submitReply = submitReply;
+window.cancelReply = cancelReply;
 
 // Iniciar
 checkAuth();

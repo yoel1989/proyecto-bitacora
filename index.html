@@ -209,6 +209,40 @@
         </div>
     </div>
 
+    <!-- Modal de Comentarios -->
+    <div id="commentsModal" class="comments-modal" style="display: none;">
+        <div class="comments-modal-content">
+            <div class="comments-modal-header">
+                <h3>💬 Comentarios de la Entrada</h3>
+                <button class="close-comments-modal" onclick="closeCommentsModal()">✕</button>
+            </div>
+            <div class="comments-modal-body">
+                <div id="commentsList" class="comments-list"></div>
+                <div class="add-comment-section">
+                    <div class="comment-user-info">
+                        <span id="commentUserName"></span>
+                    </div>
+                    <textarea id="newComment" placeholder="Escribe tu comentario aquí..." rows="3"></textarea>
+                    
+                    <!-- Sección de archivos para comentarios -->
+                    <div class="comment-files-section">
+                        <div class="comment-files-label">
+                            📎 Adjuntar archivos (imágenes, PDF, Word, Excel):
+                        </div>
+                        <input type="file" id="commentFiles" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                        <div id="commentFilesPreview" class="comment-files-preview" style="display: none;">
+                            <h4>📎 Archivos adjuntos:</h4>
+                            <div id="commentFilesPreviewGrid" class="comment-files-preview-grid"></div>
+                            <p class="comment-files-info">ℹ️ Los archivos seleccionados se adjuntarán al enviar el comentario</p>
+                        </div>
+                    </div>
+                    
+                    <button id="submitComment" onclick="submitComment()">💬 Enviar Comentario</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

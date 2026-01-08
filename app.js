@@ -35,7 +35,7 @@ async function enviarNotificacionesEmailATodos(entrada) {
             await enviarEmailConEmailJS(usuario, entrada);
         }
         
-        console.log(`✅ ${usuarios.length} notificaciones enviadas`);
+        
         
     } catch (error) {
         console.error('❌ Error en notificaciones por email:', error);
@@ -66,7 +66,7 @@ async function enviarEmailConEmailJS(usuario, entrada) {
             templateParams,
             'tu_public_key'              // Reemplazar con tu Public Key
         );
-        console.log(`✅ Email enviado a: ${usuario.email}`);
+        
     } catch (error) {
         console.error(`❌ Error enviando a ${usuario.email}:`, error);
         throw error;
@@ -207,6 +207,10 @@ function showForm() {
     entriesSection.style.display = 'none';
     formSection.style.display = 'block';
     
+    // Limpiar archivos acumulados al abrir nuevo formulario
+    allSelectedFiles = [];
+    document.getElementById('fotos').value = '';
+    
     // Establecer fecha y hora actual con zona horaria local
     const fechaInput = document.getElementById('fecha');
     if (fechaInput && !fechaInput.value) {
@@ -277,6 +281,10 @@ function hideForm() {
     document.getElementById('photoPreview').style.display = 'none';
     document.getElementById('photoPreviewGrid').innerHTML = '';
     
+    // Limpiar archivos acumulados
+    allSelectedFiles = [];
+    document.getElementById('fotos').value = '';
+    
     // Ocultar advertencia de actualización
     const updateWarning = document.getElementById('updateWarning');
     if (updateWarning) {
@@ -298,7 +306,7 @@ async function handleBitacoraSubmit(e) {
     const editId = form.dataset.editId;
     const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
     
-    const fotoFiles = document.getElementById('fotos').files;
+    const fotoFiles = allSelectedFiles.length > 0 ? allSelectedFiles : document.getElementById('fotos').files;
     let archivoUrls = [];
     
     if (editId) {
@@ -385,7 +393,7 @@ async function handleBitacoraSubmit(e) {
                 archivoUrls = newArchivoUrls;
             }
         }
-    } else {
+    } else 
         // Es una nueva entrada, solo subir los archivos nuevos
         if (fotoFiles.length > 0) {
             for (let i = 0; i < fotoFiles.length; i++) {
@@ -436,10 +444,10 @@ async function handleBitacoraSubmit(e) {
                         type: file.type,
                         size: file.size
                     });
-                }
-            }
-        }
     }
+            }
+            
+}           
     
 const fechaInput = document.getElementById('fecha').value;
     // console.log('Fecha del input:', fechaInput);
@@ -516,7 +524,7 @@ data = updateData;
         console.error('Error guardando:', error);
         alert('Error al guardar: ' + error.message);
 } else {
-        console.log('✅ Entrada guardada exitosamente');
+        
         
         // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas)
         if (!editId && data && data[0]) {
@@ -612,12 +620,12 @@ async function loadBitacoraEntries(page = 1, append = false) {
         
         // Cargar emails de usuarios inmediatamente
         if (bitacoraData.length > 0) {
-            console.log('📧 Iniciando carga de emails para', processedEntries.length, 'entradas');
             await loadUserEmailsInBackground(processedEntries);
+            
+
         }
         
-        // Actualizar UI después de cargar emails
-        console.log('🔄 Actualizando UI final');
+        // Actualizar UI después de cargar emails y comentarios
         filterAndDisplayEntries();
         
         // Ocultar botón de cargar más si no hay más entradas
@@ -656,7 +664,7 @@ async function loadUserEmailsInBackground(entries) {
     try {
         console.log('🔍 Función loadUserEmailsInBackground iniciada');
         const userIds = [...new Set(entries.map(entry => entry.user_id).filter(id => id))];
-        console.log('🔍 IDs de usuarios encontrados:', userIds);
+        
         
         if (userIds.length > 0) {
             // Obtener emails de la tabla profiles
@@ -843,42 +851,31 @@ async function countComments(bitacoraId) {
     }
 }
 
-// Función para actualizar contadores de comentarios en los botones
-async function updateCommentCounts(entries) {
+// Verificar si los comentarios de una entrada han sido leídos por el usuario actual
+async function checkIfCommentsRead(bitacoraId) {
     try {
-        // Actualizar contadores para todas las entradas
-        const entriesWithCounts = await Promise.all(
-            entries.map(async (entry) => {
-                const commentCount = await countComments(entry.id);
-                return { ...entry, commentCount };
-            })
-        );
-        
-        // Actualizar los botones en el DOM
-        entriesWithCounts.forEach(entry => {
-            // Actualizar botones en versión desktop (tabla)
-            const desktopButtons = document.querySelectorAll(`.comments-btn[onclick*="${entry.id}"]`);
-            desktopButtons.forEach(btn => {
-                const countSpan = btn.querySelector('.comment-count');
-                if (countSpan) {
-                    countSpan.textContent = entry.commentCount;
-                    countSpan.style.display = entry.commentCount > 0 ? 'inline-block' : 'none';
-                }
-            });
-            
-            // Actualizar botones en versión móvil (cards)
-            const mobileButtons = document.querySelectorAll(`.mobile-comments-btn[onclick*="${entry.id}"]`);
-            mobileButtons.forEach(btn => {
-                const countSpan = btn.querySelector('.comment-count');
-                if (countSpan) {
-                    countSpan.textContent = entry.commentCount;
-                    countSpan.style.display = entry.commentCount > 0 ? 'inline-block' : 'none';
-                }
-            });
-        });
-        
+        if (!currentUser || !currentUser.id) {
+            return false; // Sin login, se consideran no leídos
+        }
+
+        const { data, error } = await supabaseClient
+            .from('bitacora_read')
+            .select('read_at')
+            .eq('bitacora_id', bitacoraId)
+            .eq('user_id', currentUser.id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+            console.error('Error verificando comentarios leídos:', error);
+            return false;
+        }
+
+        const isRead = !!data;
+        console.log(`🔍 Entrada ${bitacoraId} leída: ${isRead}`);
+        return isRead; // true si existe registro, false si no
     } catch (error) {
-        console.error('Error actualizando contadores de comentarios:', error);
+        console.error('Error inesperado verificando comentarios leídos:', error);
+        return false;
     }
 }
 
@@ -891,7 +888,7 @@ async function loadMoreEntries() {
 }
 
 // Mostrar entradas con renderizado optimizado
-function displayEntries(entries, append = false) {
+async function displayEntries(entries, append = false) {
     const entriesList = document.getElementById('entriesList');
     
     if (!append) {
@@ -908,6 +905,23 @@ function displayEntries(entries, append = false) {
         return;
     }
 
+    // Agregar conteos de comentarios y estado de lectura ANTES de renderizar
+    console.log('🔍 Entradas originales:', entries.map(e => ({id: e.id, hasCommentCount: !!e.commentCount})));
+    
+    const entriesWithCounts = await Promise.all(
+        entries.map(async (entry) => {
+            const commentCount = await countComments(entry.id);
+            const isRead = await checkIfCommentsRead(entry.id);
+            console.log(`🔍 Entrada ${entry.id}: ${commentCount} comentarios, leído: ${isRead}`);
+            const entryWithCount = { ...entry, commentCount, isCommentsRead: isRead };
+            return entryWithCount;
+        })
+    );
+    
+    // Usar las entradas con conteos y estado de lectura
+    const entriesToRender = entriesWithCounts;
+    console.log('🔍 Entradas a renderizar:', entriesToRender.map(e => ({id: e.id, commentCount: e.commentCount, isRead: e.isCommentsRead})));
+
     // Detectar si es móvil y mostrar el formato apropiado (cacheado para mejor rendimiento)
     const isMobile = window.innerWidth <= 768;
     
@@ -916,13 +930,13 @@ function displayEntries(entries, append = false) {
     
     if (isMobile) {
         // Versión móvil: cards con botones en columna
-        entries.forEach(entry => {
+        entriesToRender.forEach(entry => {
             const card = createMobileEntryCard(entry);
             fragment.appendChild(card);
         });
     } else {
         // Versión desktop: tabla normal
-        const table = createDesktopTable(entries);
+        const table = createDesktopTable(entriesToRender);
         fragment.appendChild(table);
     }
     
@@ -935,6 +949,7 @@ function displayEntries(entries, append = false) {
 
 // Crear tarjeta móvil con lazy loading
 function createMobileEntryCard(entry) {
+    console.log('📱 CREANDO MOBILE ENTRY CARD para entrada:', entry.id, 'commentCount:', entry.commentCount, 'typeof:', typeof entry.commentCount);
     const card = document.createElement('div');
     card.className = 'mobile-entry-card';
     card.setAttribute('data-entry-id', entry.id); // Para actualizaciones en tiempo real
@@ -943,7 +958,31 @@ function createMobileEntryCard(entry) {
     const fechaFormateada = formatearFechaLocal(entry.fecha_hora || entry.fecha);
     
     // Crear archivos HTML para móvil
-    const archivos = entry.archivos || entry.fotos || []; // Mantener compatibilidad
+    // Mejorar detección de archivos con múltiples formatos posibles
+    let archivos = [];
+    
+    if (entry.archivos && Array.isArray(entry.archivos) && entry.archivos.length > 0) {
+        archivos = entry.archivos;
+    } else if (entry.fotos && Array.isArray(entry.fotos) && entry.fotos.length > 0) {
+        archivos = entry.fotos;
+    } else if (typeof entry.archivos === 'string' && entry.archivos.trim() !== '') {
+        // Si es un string JSON, intentar parsearlo
+        try {
+            archivos = JSON.parse(entry.archivos);
+        } catch (e) {
+            // Si no es JSON, tratar como URL simple
+            archivos = [entry.archivos];
+        }
+    } else if (typeof entry.fotos === 'string' && entry.fotos.trim() !== '') {
+        try {
+            archivos = JSON.parse(entry.fotos);
+        } catch (e) {
+            archivos = [entry.fotos];
+        }
+    }
+    
+    
+    
     let archivosHtml = '';
     
     if (archivos && archivos.length > 0) {
@@ -969,9 +1008,10 @@ function createMobileEntryCard(entry) {
             }
         });
         
+        // Siempre mostrar botón de más archivos si hay más de 5
         if (archivos.length > 5) {
             archivosHtml += `
-                <span class="mobile-more-photos" onclick="showAllArchivos('${entry.id}')">
+                <span class="mobile-more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los ${archivos.length} archivos">
                     +${archivos.length - 5}
                 </span>
             `;
@@ -986,9 +1026,12 @@ function createMobileEntryCard(entry) {
     let actionButtons = '';
     
     // Botón de comentarios (siempre visible para todos los usuarios autenticados)
+    const commentCount = entry.commentCount || 0;
+    const isRead = entry.isCommentsRead || false;
+    console.log(`🔨 Creando botón para entrada ${entry.id}, commentCount: ${commentCount}, leído: ${isRead}`);
     actionButtons += `
-        <button class="mobile-action-btn mobile-comments-btn" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
-            💬 Comentar <span class="comment-count">0</span>
+        <button class="mobile-action-btn mobile-comments-btn ${isRead ? 'comments-read' : ''}" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
+            Responder <span class="comment-count">${commentCount}</span>
         </button>
     `;
     
@@ -1099,7 +1142,29 @@ function createDesktopTable(entries) {
         row.setAttribute('data-entry-id', entry.id); // Para actualizaciones en tiempo real
         
         let archivosHtml = '';
-        const archivos = entry.archivos || entry.fotos || []; // Mantener compatibilidad con datos antiguos
+        
+        // Mejorar detección de archivos para desktop también
+        let archivos = [];
+        
+        if (entry.archivos && Array.isArray(entry.archivos) && entry.archivos.length > 0) {
+            archivos = entry.archivos;
+        } else if (entry.fotos && Array.isArray(entry.fotos) && entry.fotos.length > 0) {
+            archivos = entry.fotos;
+        } else if (typeof entry.archivos === 'string' && entry.archivos.trim() !== '') {
+            try {
+                archivos = JSON.parse(entry.archivos);
+            } catch (e) {
+                archivos = [entry.archivos];
+            }
+        } else if (typeof entry.fotos === 'string' && entry.fotos.trim() !== '') {
+            try {
+                archivos = JSON.parse(entry.fotos);
+            } catch (e) {
+                archivos = [entry.fotos];
+            }
+        }
+        
+        
         
         if (archivos && archivos.length > 0) {
             const archivosParaMostrar = archivos.slice(0, 3);
@@ -1125,9 +1190,10 @@ function createDesktopTable(entries) {
                 }
             });
             
+            // Siempre mostrar botón de más archivos si hay más de 3 en desktop
             if (archivos.length > 3) {
                 archivosHtml += `
-                    <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los archivos">
+                    <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los ${archivos.length} archivos">
                         +${archivos.length - 3}
                     </span>
                 `;
@@ -1143,8 +1209,8 @@ function createDesktopTable(entries) {
         
         // Botón de comentarios (siempre visible para todos los usuarios autenticados)
         actionButtons += `
-            <button class="comments-btn" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
-                💬 Comentar <span class="comment-count">0</span>
+            <button class="comments-btn ${entry.isCommentsRead ? 'comments-read' : ''}" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
+                Responder <span class="comment-count">${entry.commentCount || 0}</span>
             </button>
         `;
         
@@ -1417,9 +1483,12 @@ async function checkDatabaseStructure() {
 
 // Verificar sesión
 async function checkAuth() {
+    console.log('🔍 Iniciando checkAuth...');
     const { data: { session } } = await supabaseClient.auth.getSession();
+    console.log('🔍 Session obtenida:', !!session);
     
     if (session) {
+        console.log('🔍 Usuario encontrado:', session.user.email);
         currentUser = session.user;
         
         // Establecer información básica inmediatamente
@@ -1550,6 +1619,9 @@ if (document.getElementById('ubicacion')) {
     setupTextarea(document.getElementById('ubicacion'));
 }
 
+// Variable global para almacenar todos los archivos seleccionados
+let allSelectedFiles = [];
+
 // Preview de archivos
 document.getElementById('fotos')?.addEventListener('change', function(e) {
     const files = e.target.files;
@@ -1558,11 +1630,14 @@ document.getElementById('fotos')?.addEventListener('change', function(e) {
     const form = document.getElementById('bitacoraForm');
     const isEditMode = form.dataset.editId;
     
-    if (files.length > 0) {
+    // Acumular archivos nuevos con los existentes
+    allSelectedFiles = [...allSelectedFiles, ...Array.from(files)];
+    
+    if (allSelectedFiles.length > 0) {
         preview.style.display = 'block';
         grid.innerHTML = '';
         
-        Array.from(files).forEach((file, index) => {
+        allSelectedFiles.forEach((file, index) => {
             const item = document.createElement('div');
             item.className = 'file-preview-item';
             
@@ -1593,14 +1668,28 @@ document.getElementById('fotos')?.addEventListener('change', function(e) {
             grid.appendChild(item);
         });
         
+        // Agregar botón "+" para agregar más archivos
+        const addMoreItem = document.createElement('div');
+        addMoreItem.className = 'file-preview-item file-preview-add-more';
+        addMoreItem.innerHTML = `
+            <div class="file-preview-content">
+                <div class="add-more-icon">+</div>
+                <div class="add-more-text">Agregar más</div>
+            </div>
+        `;
+        addMoreItem.addEventListener('click', function() {
+            document.getElementById('fotos').click();
+        });
+        grid.appendChild(addMoreItem);
+        
         // Si estamos en modo edición, actualizar el texto informativo
         const fileInfo = preview.querySelector('.file-info');
         if (isEditMode && fileInfo) {
             const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
             if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
-                fileInfo.textContent = `ℹ️ ${files.length} archivos nuevos se agregarán a los existentes`;
+                fileInfo.textContent = `ℹ️ ${allSelectedFiles.length} archivos nuevos se agregarán a los existentes`;
             } else {
-                fileInfo.textContent = `⚠️ ${files.length} archivos nuevos reemplazarán los existentes`;
+                fileInfo.textContent = `⚠️ ${allSelectedFiles.length} archivos nuevos reemplazarán los existentes`;
             }
         }
     } else {
@@ -1768,7 +1857,7 @@ async function initializeRealtimeNotifications() {
             )
             .subscribe();
             
-        console.log('✅ Sistema de notificaciones en tiempo real activado');
+        
         
     } catch (error) {
         console.error('❌ Error al inicializar notificaciones en tiempo real:', error);
@@ -2076,26 +2165,76 @@ async function generarFolioConsecutivo(resetear = false) {
 let currentBitacoraId = null;
 let commentsSubscription = null;
 
+// Marcar comentarios como leídos en la base de datos
+async function markCommentsAsReadInDB(bitacoraId) {
+    try {
+        if (!currentUser || !currentUser.id) {
+            console.log('⚠️ No hay usuario actual, no se puede marcar como leído');
+            return;
+        }
+
+        console.log('🔍 Marcando comentarios como leídos para entrada:', bitacoraId, 'usuario:', currentUser.id);
+        
+        // Insertar o actualizar registro de lectura
+        const { data, error } = await supabaseClient
+            .from('bitacora_read')
+            .upsert({
+                bitacora_id: bitacoraId,
+                user_id: currentUser.id,
+                read_at: new Date().toISOString()
+            }, {
+                onConflict: 'bitacora_id,user_id'
+            });
+
+        if (error) {
+            console.error('Error marcando comentarios como leídos:', error);
+            // Si la tabla no existe, marcar solo visualmente
+            markCommentsAsReadVisual(bitacoraId);
+            return;
+        }
+
+        console.log('✅ Comentarios marcados como leídos en la base de datos');
+        
+        // Marcar visualmente
+        markCommentsAsReadVisual(bitacoraId);
+        
+    } catch (error) {
+        console.error('Error inesperado marcando como leídos:', error);
+        markCommentsAsReadVisual(bitacoraId);
+    }
+}
+
+// Marcar comentarios como leídos visualmente
+function markCommentsAsReadVisual(bitacoraId) {
+    const buttons = document.querySelectorAll(`.comments-btn[onclick*="${bitacoraId}"], .mobile-comments-btn[onclick*="${bitacoraId}"]`);
+    buttons.forEach(btn => {
+        btn.classList.add('comments-read');
+    });
+}
+
 // Abrir modal de comentarios
-function openCommentsModal(bitacoraId) {
-    currentBitacoraId = bitacoraId;
-    
-    // Mostrar información del usuario actual
-    const commentUserName = document.getElementById('commentUserName');
-    commentUserName.textContent = currentUser.email || 'Usuario';
-    
-    // Limpiar textarea
-    document.getElementById('newComment').value = '';
-    
-    // Mostrar modal
-    const modal = document.getElementById('commentsModal');
-    modal.style.display = 'flex';
-    
-    // Cargar comentarios (usar versión simple temporalmente para debug)
-    loadComments(bitacoraId);
-    
-    // Suscribirse a cambios en tiempo real de comentarios
-    subscribeToComments(bitacoraId);
+async function openCommentsModal(entryId) {
+    try {
+        console.log('🔍 Abriendo modal de comentarios para entrada:', entryId);
+        
+        // Marcar comentarios como leídos (en la base de datos)
+        await markCommentsAsReadInDB(entryId);
+        
+        // Abrir modal
+        const modal = document.getElementById('commentsModal');
+        modal.style.display = 'flex';
+        modal.dataset.entryId = entryId;
+        
+        // Cargar comentarios
+        await loadComments(entryId);
+        
+        // Suscribirse a cambios en tiempo real de comentarios
+        subscribeToComments(entryId);
+        
+    } catch (error) {
+        console.error('Error abriendo modal de comentarios:', error);
+        showNotification('❌ Error al abrir los comentarios', 'error');
+    }
 }
 
 // Cerrar modal de comentarios
@@ -2114,8 +2253,11 @@ function closeCommentsModal() {
 
 // Cargar comentarios de una entrada (versión simplificada)
 async function loadComments(bitacoraId) {
+    console.log('🔍 Cargando comentarios para bitácora ID:', bitacoraId);
     try {
-        console.log('🔍 Cargando comentarios para bitácora:', bitacoraId);
+        currentBitacoraId = bitacoraId;
+        console.log('🔍 currentBitacoraId asignado:', currentBitacoraId);
+        
         
         // Cargar todos los comentarios de esta bitácora
         const { data: allComments, error: commentsError } = await supabaseClient
@@ -2186,32 +2328,24 @@ async function loadComments(bitacoraId) {
             }))
         }));
         
-        console.log('🔍 Respuesta comentarios con perfiles y respuestas:', commentsWithProfiles);
-        displayComments(commentsWithProfiles);
-        
+displayComments(commentsWithProfiles);
     } catch (error) {
-        console.error('Error inesperado cargando comentarios:', error);
+        console.error('Error cargando comentarios:', error);
         showNotification('❌ Error al cargar los comentarios', 'error');
     }
 }
 
-// Mostrar comentarios en el modal
 function displayComments(comments) {
     const commentsList = document.getElementById('commentsList');
     
-    console.log('🔍 Mostrando comentarios:', comments);
-    
     if (!comments || comments.length === 0) {
-        commentsList.innerHTML = '<p class="no-comments">Aún no hay comentarios. ¡Sé el primero en comentar!</p>';
-        console.log('🔍 No hay comentarios para mostrar');
+        commentsList.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No hay comentarios aún. ¡Sé el primero en comentar!</p>';
         return;
     }
     
-    console.log('🔍 Procesando', comments.length, 'comentarios');
-    
     let commentsHtml = '';
+    
     comments.forEach(comment => {
-        console.log('🔍 Procesando comentario:', comment);
         
         const userEmail = comment.profiles?.email || 'Usuario desconocido';
         const userRole = comment.profiles?.rol || 'desconocido';
@@ -2388,7 +2522,6 @@ function displayComments(comments) {
         `;
     });
     
-    console.log('🔍 HTML generado:', commentsHtml);
     commentsList.innerHTML = commentsHtml;
 }
 
@@ -2494,6 +2627,7 @@ async function submitComment() {
     console.log('🔍 Bitácora ID:', currentBitacoraId);
     console.log('🔍 Usuario ID:', currentUser.id);
     console.log('🔍 Archivos:', commentFiles);
+    console.log('🔍 Textarea encontrado:', !!document.getElementById('newComment'));
     
     if (!commentText) {
         showNotification('❌ Por favor escribe un comentario', 'error');
@@ -2993,7 +3127,7 @@ async function downloadPDF() {
         }
         
         // Crear un contenedor temporal para el PDF
-        const pdfContainer = document.createElement('div');
+        let pdfContainer = document.createElement('div');
         pdfContainer.style.cssText = `
             position: fixed;
             top: -9999px;
@@ -3419,4 +3553,10 @@ window.submitReply = submitReply;
 window.cancelReply = cancelReply;
 
 // Iniciar
-checkAuth();
+console.log('🚀 Iniciando aplicación...');
+checkAuth().then(() => {
+    console.log('✅ checkAuth completado exitosamente');
+}).catch(error => {
+    console.error('❌ Error en checkAuth:', error);
+    console.error('Stack trace:', error.stack);
+});

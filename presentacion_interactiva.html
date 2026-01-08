@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Presentación: Plataforma de Bitácora de Obra</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            overflow-x: hidden;
+        }
+
+        .presentation-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .slide {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            margin: 20px auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            min-height: 600px;
+            display: flex;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: slideIn 0.5s forwards;
+        }
+
+        @keyframes slideIn {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .slide h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .slide h2 {
+            color: #3498db;
+            margin: 20px 0;
+            font-size: 1.8em;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .slide h3 {
+            color: #2980b9;
+            margin: 15px 0;
+            font-size: 1.3em;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #3498db;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+
+        .screenshot-container {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .screenshot-placeholder {
+            width: 100%;
+            max-width: 800px;
+            height: 400px;
+            background: linear-gradient(45deg, #e3f2fd 25%, #bbdefb 25%, #bbdefb 50%, #e3f2fd 50%, #e3f2fd 75%, #bbdefb 75%, #bbdefb);
+            background-size: 20px 20px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto;
+            color: #1976d2;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .navigation {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .nav-btn:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .slide-number {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: #e74c3c;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+
+        .tech-stack {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .tech-item {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 5px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .bullet-points {
+            list-style: none;
+            padding: 0;
+        }
+
+        .bullet-points li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .bullet-points li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .highlight {
+            background: linear-gradient(120deg, #ffd700 0%, #ffed4e 100%);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .contact-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 20px 0;
+        }
+
+        @media (max-width: 768px) {
+            .presentation-container {
+                padding: 10px;
+            }
+            
+            .slide {
+                padding: 20px;
+            }
+            
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation-container">
+        <!-- Slide 1: Título -->
+        <div class="slide">
+            <div class="slide-number">1</div>
+            <h1>🏗️ Plataforma de Bitácora de Obra Digital</h1>
+            <div style="text-align: center; margin-top: 50px;">
+                <h2 style="color: #2c3e50; border: none;">Sistema Integral de Gestión y Seguimiento</h2>
+                <p style="font-size: 1.3em; color: #7f8c8d; margin-top: 20px;">
+                    Transformación digital para la construcción moderna
+                </p>
+                <div style="margin-top: 50px;">
+                    <span class="highlight" style="margin: 10px;">Multiusuario</span>
+                    <span class="highlight" style="margin: 10px;">En Tiempo Real</span>
+                    <span class="highlight" style="margin: 10px;">Seguro</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 2: Características Principales -->
+        <div class="slide">
+            <div class="slide-number">2</div>
+            <h1>🚀 Características Principales</h1>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <h3>🔐 Autenticación Segura</h3>
+                    <p>Login con email y contraseña, roles definidos, sesiones persistentes</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📁 Gestión de Archivos</h3>
+                    <p>Soporte para imágenes, PDF, Word, Excel. Vista previa antes de subir</p>
+                </div>
+                <div class="feature-card">
+                    <h3>💬 Comentarios en Tiempo Real</h3>
+                    <p>Sistema colaborativo con respuestas anidadas y archivos adjuntos</p>
+                </div>
+                <div class="feature-card">
+                    <h3>🔍 Búsqueda Avanzada</h3>
+                    <p>Filtros múltiples por estado, tipo, fecha y búsqueda por palabras clave</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📊 Reportes PDF</h3>
+                    <p>Exportación profesional con filtros aplicados, ideal para informes</p>
+                </div>
+                <div class="feature-card">
+                    <h3>📱 Responsive Design</h3>
+                    <p>Diseño adaptativo para desktop, tablet y móvil</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3: Roles de Usuario -->
+        <div class="slide">
+            <div class="slide-number">3</div>
+            <h1>👥 Roles y Permisos</h1>
+            <div class="two-columns">
+                <div>
+                    <h3>🔑 Administrador</h3>
+                    <ul class="bullet-points">
+                        <li>Acceso completo al sistema</li>
+                        <li>Gestión de usuarios</li>
+                        <li>Editar y eliminar cualquier entrada</li>
+                        <li>Configuración general</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3>🛠️ Roles Técnicos</h3>
+                    <ul class="bullet-points">
+                        <li>Contratista</li>
+                        <li>Interventoría</li>
+                        <li>Supervisión</li>
+                        <li>Ordenador de Gasto</li>
+                    </ul>
+                    <p style="margin-top: 20px; color: #e74c3c;">
+                        ⚠️ Solo pueden editar sus propias entradas
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 4: Pantalla de Login -->
+        <div class="slide">
+            <div class="slide-number">4</div>
+            <h1>🔓 Pantalla de Acceso</h1>
+            <div class="screenshot-container">
+                <h3>Interfaz de Login</h3>
+                <div class="screenshot-placeholder">
+                    <div>
+                        <h2>🏗️ Bitácora de Obra</h2>
+                        <p style="margin: 20px 0;">Formulario de login con:</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>Campo de email</li>
+                            <li>Campo de contraseña</li>
+                            <li>Botón de ingresar</li>
+                            <li>Mensajes de error</li>
+                        </ul>
+                    </div>
+                </div>
+                <p><strong>Características de seguridad:</strong></p>
+                <ul class="bullet-points">
+                    <li>Autenticación con Supabase</li>
+                    <li>Encriptación SSL</li>
+                    <li>Validación del lado del servidor</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Slide 5: Panel Principal -->
+        <div class="slide">
+            <div class="slide-number">5</div>
+            <h1>📊 Panel Principal</h1>
+            <div class="screenshot-container">
+                <h3>Vista General del Sistema</h3>
+                <div class="screenshot-placeholder">
+                    <div>
+                        <h2>Panel de Control</h2>
+                        <p style="margin: 20px 0;">Elementos principales:</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>Header con info del usuario</li>
+                            <li>Contador de entradas</li>
+                            <li>Indicador de notificaciones 🔔</li>
+                            <li>Botón Nueva Entrada</li>
+                            <li>Sección de filtros</li>
+                            <li>Lista de bitácoras</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6: Formulario Nueva Entrada -->
+        <div class="slide">
+            <div class="slide-number">6</div>
+            <h1>📝 Formulario de Nueva Entrada</h1>
+            <div class="screenshot-container">
+                <h3>Registro Detallado</h3>
+                <div class="screenshot-placeholder">
+                    <div>
+                        <h2>Campos del Formulario</h2>
+                        <ul style="text-align: left; display: inline-block; margin: 20px 0;">
+                            <li>📅 Fecha y hora</li>
+                            <li>📋 Título (mínimo 5 caracteres)</li>
+                            <li>📄 Descripción detallada</li>
+                            <li>⏰ Hora inicio y final</li>
+                            <li>🏷️ Tipo de nota</li>
+                            <li>📍 Ubicación específica</li>
+                            <li>✅ Estado del avance</li>
+                            <li>📎 Archivos múltiples</li>
+                        </ul>
+                    </div>
+                </div>
+                <p><strong>Validaciones:</strong> Campos obligatorios marcados con *</p>
+            </div>
+        </div>
+
+        <!-- Slide 7: Tipos de Notas -->
+        <div class="slide">
+            <div class="slide-number">7</div>
+            <h1>🏷️ Clasificación por Tipo</h1>
+            <div style="margin: 30px 0;">
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <h3>📈 Avance</h3>
+                        <p>Progresos y cumplimientos del proyecto</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>⚠️ Incidente</h3>
+                        <p>Problemas, emergencias y contratiempos</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>👁️ Observación</h3>
+                        <p>Notas importantes y verificaciones</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🤝 Reunión</h3>
+                        <p>Actas, decisiones y acuerdos</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📄 Documento</h3>
+                        <p>Informes técnicos y documentación</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📷 Registro Fotográfico</h3>
+                        <p>Evidencia visual del progreso</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🔧 Otro</h3>
+                        <p>Categoría flexible para casos especiales</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8: Gestión de Archivos -->
+        <div class="slide">
+            <div class="slide-number">8</div>
+            <h1>📎 Gestión de Archivos</h1>
+            <div style="margin: 30px 0;">
+                <h3>Formatos Soportados</h3>
+                <div class="tech-stack">
+                    <div class="tech-item">
+                        <h4>📷 Imágenes</h4>
+                        <p>JPG, PNG, GIF, WebP</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>📄 Documentos</h4>
+                        <p>PDF, DOC, DOCX</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>📊 Hojas de Cálculo</h4>
+                        <p>XLS, XLSX</p>
+                    </div>
+                    <div class="tech-item">
+                        <h4>📋 Presentaciones</h4>
+                        <p>PPT, PPTX</p>
+                    </div>
+                </div>
+                <div class="screenshot-container">
+                    <h3>Vista Previa de Archivos</h3>
+                    <div class="screenshot-placeholder">
+                        <div>
+                            <h2>📎 Vista Previa</h2>
+                            <p>Archivos seleccionados con iconos diferenciados por tipo</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 9: Sistema de Comentarios -->
+        <div class="slide">
+            <div class="slide-number">9</div>
+            <h1>💬 Sistema de Comentarios</h1>
+            <div class="screenshot-container">
+                <h3>Colaboración en Tiempo Real</h3>
+                <div class="screenshot-placeholder">
+                    <div>
+                        <h2>Modal de Comentarios</h2>
+                        <ul style="text-align: left; display: inline-block; margin: 20px 0;">
+                            <li>💭 Lista de comentarios</li>
+                            <li>🔄 Respuestas anidadas</li>
+                            <li>📎 Archivos adjuntos</li>
+                            <li>👤 Identificación del autor</li>
+                            <li>🕒 Timestamp de cada mensaje</li>
+                        </ul>
+                    </div>
+                </div>
+                <p><strong>Notificaciones automáticas</strong> cuando hay nuevos comentarios</p>
+            </div>
+        </div>
+
+        <!-- Slide 10: Filtros de Búsqueda -->
+        <div class="slide">
+            <div class="slide-number">10</div>
+            <h1>🔍 Filtros y Búsqueda</h1>
+            <div class="screenshot-container">
+                <h3>Búsqueda Avanzada</h3>
+                <div class="screenshot-placeholder">
+                    <div>
+                        <h2>Panel de Filtros</h2>
+                        <ul style="text-align: left; display: inline-block; margin: 20px 0;">
+                            <li>🔍 Búsqueda por palabra clave</li>
+                            <li>📊 Filtrado por estado</li>
+                            <li>🏷️ Filtrado por tipo de nota</li>
+                            <li>📅 Filtrado por fecha</li>
+                            <li>🧹 Botón limpiar filtros</li>
+                        </ul>
+                    </div>
+                </div>
+                <p><strong>Combinación múltiple</strong> de filtros para búsquedas precisas</p>
+            </div>
+        </div>
+
+        <!-- Slide 11: Estados de Avance -->
+        <div class="slide">
+            <div class="slide-number">11</div>
+            <h1>📈 Gestión de Estados</h1>
+            <div style="margin: 50px 0; text-align: center;">
+                <div style="display: flex; justify-content: space-around; align-items: center;">
+                    <div style="background: #ffebee; padding: 30px; border-radius: 15px; width: 200px;">
+                        <h3 style="color: #c62828;">🔴 Pendiente</h3>
+                        <p>Tareas por iniciar</p>
+                    </div>
+                    <div style="font-size: 3em;">→</div>
+                    <div style="background: #fff3e0; padding: 30px; border-radius: 15px; width: 200px;">
+                        <h3 style="color: #f57c00;">🟡 En Progreso</h3>
+                        <p>Trabajo en ejecución</p>
+                    </div>
+                    <div style="font-size: 3em;">→</div>
+                    <div style="background: #e8f5e8; padding: 30px; border-radius: 15px; width: 200px;">
+                        <h3 style="color: #2e7d32;">🟢 Completado</h3>
+                        <p>Tareas finalizadas</p>
+                    </div>
+                </div>
+            </div>
+            <p style="text-align: center; margin-top: 40px;">
+                <strong>Actualización dinámica</strong> con indicadores visuales
+            </p>
+        </div>
+
+        <!-- Slide 12: Exportación PDF -->
+        <div class="slide">
+            <div class="slide-number">12</div>
+            <h1>📥 Exportación de Informes</h1>
+            <div class="screenshot-container">
+                <h3>Generación de Reportes PDF</h3>
+                <div class="screenshot-placeholder">
+                    <div>
+                        <h2>📄 Informe Profesional</h2>
+                        <ul style="text-align: left; display: inline-block; margin: 20px 0;">
+                            <li>📊 Todas las entradas filtradas</li>
+                            <li>📋 Formato profesional</li>
+                            <li>📎 Referencia a archivos</li>
+                            <li>📅 Fechas y timestamps</li>
+                            <li>👤 Información del usuario</li>
+                        </ul>
+                    </div>
+                </div>
+                <p><strong>Botón:</strong> 📥 Descargar PDF en la sección de filtros</p>
+            </div>
+        </div>
+
+        <!-- Slide 13: Arquitectura Técnica -->
+        <div class="slide">
+            <div class="slide-number">13</div>
+            <h1>🏗️ Arquitectura Técnica</h1>
+            <div class="tech-stack">
+                <div class="tech-item">
+                    <h3>Frontend</h3>
+                    <p>HTML5, CSS3, JavaScript ES6+</p>
+                </div>
+                <div class="tech-item">
+                    <h3>Backend</h3>
+                    <p>Supabase (PostgreSQL)</p>
+                </div>
+                <div class="tech-item">
+                    <h3>Autenticación</h3>
+                    <p>Supabase Auth</p>
+                </div>
+                <div class="tech-item">
+                    <h3>Storage</h3>
+                    <p>Supabase Storage</p>
+                </div>
+                <div class="tech-item">
+                    <h3>Email</h3>
+                    <p>EmailJS</p>
+                </div>
+                <div class="tech-item">
+                    <h3>PDF</h3>
+                    <p>jsPDF</p>
+                </div>
+            </div>
+            <p style="text-align: center; margin-top: 30px;">
+                <strong>Infraestructura moderna y escalable</strong>
+            </p>
+        </div>
+
+        <!-- Slide 14: Beneficios -->
+        <div class="slide">
+            <div class="slide-number">14</div>
+            <h1>💎 Beneficios Clave</h1>
+            <div class="two-columns">
+                <div>
+                    <h3>🏢 Para la Gestión</h3>
+                    <ul class="bullet-points">
+                        <li>Centralización de información</li>
+                        <li>Reducción del 80% en errores</li>
+                        <li>Mejora en comunicación</li>
+                        <li>Toma de decisiones informada</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3>👥 Para el Equipo</h3>
+                    <ul class="bullet-points">
+                        <li>Acceso inmediato a información</li>
+                        <li>Colaboración en tiempo real</li>
+                        <li>Documentación automática</li>
+                        <li>Notificaciones instantáneas</li>
+                    </ul>
+                </div>
+            </div>
+            <div style="background: #e8f5e8; padding: 30px; border-radius: 15px; margin-top: 30px; text-align: center;">
+                <h3>📊 ROI Estimado: 300% en el primer año</h3>
+                <p>Inversión mínima, máximo retorno</p>
+            </div>
+        </div>
+
+        <!-- Slide 15: Implementación -->
+        <div class="slide">
+            <div class="slide-number">15</div>
+            <h1>🚀 Implementación Rápida</h1>
+            <div style="margin: 40px 0;">
+                <h3>Requisitos Mínimos</h3>
+                <ul class="bullet-points">
+                    <li>Navegador web moderno</li>
+                    <li>Conexión a internet</li>
+                    <li>Cuenta de Supabase</li>
+                </ul>
+                
+                <h3 style="margin-top: 30px;">Pasos de Instalación</h3>
+                <div style="background: #ecf0f1; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <p><strong>1.</strong> Crear proyecto en Supabase</p>
+                    <p><strong>2.</strong> Configurar tablas y storage</p>
+                    <p><strong>3.</strong> Ajustar credenciales en config.js</p>
+                    <p><strong>4.</strong> ¡Listo para usar!</p>
+                </div>
+                
+                <p style="text-align: center; font-size: 1.2em; color: #27ae60;">
+                    ⏱️ <strong>Tiempo estimado: 30 minutos</strong>
+                </p>
+            </div>
+        </div>
+
+        <!-- Slide 16: Contacto -->
+        <div class="slide">
+            <div class="slide-number">16</div>
+            <h1>📞 ¡Comienza Hoy!</h1>
+            <div class="contact-info">
+                <h2>🚀 Transforma tu gestión de proyectos</h2>
+                <div style="margin: 30px 0;">
+                    <p>📧 <strong>Email:</strong> contacto@bitacoradigital.com</p>
+                    <p>🌐 <strong>Web:</strong> www.bitacoradigital.com</p>
+                    <p>📱 <strong>WhatsApp:</strong> +1 234 567 890</p>
+                </div>
+                <div style="margin-top: 40px;">
+                    <h3>Próximos Pasos:</h3>
+                    <ol style="display: inline-block; text-align: left;">
+                        <li>Agenda una demo personalizada</li>
+                        <li>Prueba gratuita 30 días</li>
+                        <li>Capacitación del equipo</li>
+                        <li>Implementación gradual</li>
+                        <li>Soporte continuo</li>
+                    </ol>
+                </div>
+            </div>
+            <p style="text-align: center; margin-top: 40px;">
+                <em>¡Hagamos juntos el futuro de la construcción digital!</em>
+            </p>
+        </div>
+    </div>
+
+    <!-- Navegación -->
+    <div class="navigation">
+        <button class="nav-btn" onclick="previousSlide()">⬅️ Anterior</button>
+        <button class="nav-btn" onclick="nextSlide()">Siguiente ➡️</button>
+        <button class="nav-btn" onclick="goToStart()">🏠 Inicio</button>
+    </div>
+
+    <script>
+        let currentSlide = 0;
+        const slides = document.querySelectorAll('.slide');
+
+        function showSlide(index) {
+            slides.forEach((slide, i) => {
+                slide.style.display = i === index ? 'flex' : 'none';
+                if (i === index) {
+                    slide.style.animation = 'none';
+                    setTimeout(() => {
+                        slide.style.animation = 'slideIn 0.5s forwards';
+                    }, 10);
+                }
+            });
+        }
+
+        function nextSlide() {
+            currentSlide = (currentSlide + 1) % slides.length;
+            showSlide(currentSlide);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function previousSlide() {
+            currentSlide = (currentSlide - 1 + slides.length) % slides.length;
+            showSlide(currentSlide);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function goToStart() {
+            currentSlide = 0;
+            showSlide(currentSlide);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // Inicialización
+        showSlide(0);
+
+        // Navegación con teclado
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') previousSlide();
+            if (e.key === 'Home') goToStart();
+        });
+
+        // Touch gestures para móvil
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        document.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        document.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            if (touchEndX < touchStartX - 50) nextSlide();
+            if (touchEndX > touchStartX + 50) previousSlide();
+        }
+    </script>
+</body>
+</html>

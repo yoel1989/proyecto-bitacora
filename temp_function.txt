@@ -1,0 +1,7 @@
+// Cargar más entradas (paginación infinita)
+async function loadMoreEntries() {
+    if (isLoadingEntries || allEntries.length >= totalEntries) return;
+    
+    currentPage++;
+    await loadBitacoraEntries(currentPage, true);
+}

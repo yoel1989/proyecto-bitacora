@@ -5,21 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>Bitácora de Obra</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="comments-buttons.css">
+    <link rel="stylesheet" href="comments-modal.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" onerror="console.error('Error cargando jsPDF')"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" onerror="console.error('Error cargando html2canvas')"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
     <script src="config.js"></script>
     <script>
         // Verificar que Supabase esté disponible
         if (typeof supabaseClient === 'undefined') {
             console.error('Error: supabaseClient no está disponible. Verifica que config.js se cargue correctamente.');
         }
-        
-        // Inicializar EmailJS
-        (function() {
-            emailjs.init("tu_public_key"); // Reemplazar con tu Public Key
-        })();
     </script>
 </head>
 <body>
@@ -33,10 +29,13 @@
                     <input type="password" id="password" placeholder="Contraseña" required>
                     <button type="submit" id="loginBtn">Ingresar</button>
                 </form>
+                <div class="login-register-link">
+                    <p>¿No tienes cuenta? <a href="#" onclick="openRegisterModal()">Regístrate con código de invitación</a></p>
+                </div>
                 <p id="loginError" class="error"></p>
             </div>
         </div>
-
+ 
         <!-- Main App -->
         <div id="mainApp" style="display: none;">
             <header>
@@ -44,13 +43,25 @@
                 <div class="user-info">
                     <span id="userName"></span>
                     <span id="userRole"></span>
-                    <div class="notification-indicator">
-                        <span id="notificationBadge" class="notification-badge" style="display: none;">🔔</span>
+                    <div class="notification-container">
+                        <button id="notificationBtn" class="notification-btn" title="Notificaciones">
+                            🔔
+                            <span id="notificationCount" class="notification-count" style="display: none;">0</span>
+                        </button>
+                        <div id="notificationDropdown" class="notification-dropdown" style="display: none;">
+                            <div class="notification-header">
+                                <h4>Notificaciones</h4>
+                                <button id="markAllRead" class="mark-all-read-btn">Marcar todas leídas</button>
+                            </div>
+                            <div id="notificationList" class="notification-list">
+                                <p class="no-notifications">No hay notificaciones nuevas</p>
+                            </div>
+                        </div>
                     </div>
                     <button id="logoutBtn">Salir</button>
                 </div>
             </header>
-
+ 
             <main>
                 <!-- New Entry Form (Hidden by default) -->
                 <section class="form-section" id="formSection" style="display: none;">
@@ -63,27 +74,27 @@
                             <label>Fecha y Hora: <span class="required">*</span></label>
                             <input type="datetime-local" id="fecha" required>
                         </div>
-                        
+                         
                         <div class="form-group">
                             <label>Título: <span class="required">*</span></label>
                             <textarea id="titulo" required placeholder="Ingrese el título (mínimo 5 caracteres)..." rows="1"></textarea>
                         </div>
-                        
+                         
                         <div class="form-group">
                             <label>Descripción: <span class="required">*</span></label>
                             <textarea id="descripcion" required placeholder="Ingrese una descripción detallada (mínimo 10 caracteres)..." rows="1"></textarea>
                         </div>
-                        
+                         
                         <div class="form-group">
                             <label>Hora Inicio: <span class="required">*</span></label>
                             <input type="time" id="horaInicio" required>
                         </div>
-                        
+                         
                         <div class="form-group">
                             <label>Hora Final: <span class="required">*</span></label>
                             <input type="time" id="horaFinal" required>
                         </div>
-                        
+                         
                         <div class="form-group">
                             <label>Tipo de Nota: <span class="required">*</span></label>
                             <select id="tipoNota" required>
@@ -97,24 +108,20 @@
                                 <option value="otro">Otro</option>
                             </select>
                         </div>
-                        
+                         
                         <div class="form-group">
                             <label>Ubicación: <span class="required">*</span></label>
-                            <textarea id="ubicacion" required placeholder="Ingrese la ubicación específica (mínimo 3 caracteres)..." rows="1"></textarea>
-                        </div>
-                        
-                        <div class="form-group">
-                            <label>Estado: <span class="required">*</span></label>
-                            <select id="estado" required>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="en_progreso">En Progreso</option>
-                                <option value="completado">Completado</option>
+                            <select id="ubicacion" required>
+                                <option value="">Seleccionar ubicación</option>
+                                <option value="Troncal Calle 26">Troncal Calle 26</option>
+                                <option value="Troncal NQS">Troncal NQS</option>
+                                <option value="Troncal Caracas">Troncal Caracas</option>
                             </select>
                         </div>
-                        
+                         
                         <div class="form-group">
-                            <label>Archivos (Imágenes, PDF, Word, Excel):</label>
-                            <input type="file" id="fotos" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                            <label>Archivos (Imágenes, PDF, Word, Excel, ZIP, AutoCAD):</label>
+                            <input type="file" id="fotos" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.dwg,.dxf,.dwf">
                             <div id="photoPreview" class="file-preview" style="display: none;">
                                 <h4>📎 Vista previa de archivos:</h4>
                                 <div id="photoPreviewGrid" class="file-preview-grid"></div>
@@ -131,81 +138,176 @@
                                 </div>
                             </div>
                         </div>
-                        
+                         
                         <button type="submit">Guardar Entrada</button>
                     </form>
                 </section>
-
+ 
                 <!-- Bitacora Entries -->
                 <section class="entries-section">
-                <div class="section-header">
-                    <div class="title-section">
-                        <h2>Entradas de Bitácora</h2>
-                        <div class="entries-counter" id="entriesCounter">
-                            <span class="counter-number">0</span>
-                            <span class="counter-text">entradas</span>
+                    <div class="section-header">
+                        <div class="title-section">
+                            <h2>Entradas de Bitácora</h2>
+                            <div class="entries-counter" id="entriesCounter">
+                                <span class="counter-number">0</span>
+                                <span class="counter-text">entradas</span>
+                            </div>
+                        </div>
+                        <div class="header-buttons">
+                            <button id="manageUsersBtn" class="manage-users-btn" style="display: none;">👥 Gestionar Usuarios</button>
+                            <button id="newEntryBtn" class="new-entry-btn">+ Nueva Entrada</button>
                         </div>
                     </div>
-                    <div class="header-buttons">
-                        <button id="manageUsersBtn" class="manage-users-btn" style="display: none;">👥 Gestionar Usuarios</button>
-                        <button id="newEntryBtn" class="new-entry-btn">+ Nueva Entrada</button>
+                     
+                    <div class="filters-section">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <input type="text" id="searchInput" placeholder="🔍 Buscar por palabra clave...">
+                            </div>
+ 
+                            <div class="filter-group">
+                                <select id="tipoFilter">
+                                    <option value="">Tipo de nota</option>
+                                    <option value="avance">Avance</option>
+                                    <option value="incidente">Incidente</option>
+                                    <option value="observacion">Observación</option>
+                                    <option value="reunion">Reunión</option>
+                                    <option value="documento">Documento</option>
+                                    <option value="fotografico">Registro Fotográfico</option>
+                                    <option value="otro">Otro</option>
+                                </select>
+                            </div>
+                            <div class="filter-group">
+                                <select id="ubicacionFilter">
+                                    <option value="">Ubicación</option>
+                                    <option value="Troncal Calle 26">Troncal Calle 26</option>
+                                    <option value="Troncal NQS">Troncal NQS</option>
+                                    <option value="Troncal Caracas">Troncal Caracas</option>
+                                </select>
+                            </div>
+                            <div class="filter-group" style="position: relative;">
+                                <div style="display: flex; gap: 6px; align-items: center;">
+                                    <input type="date" id="fechaInicioFilter" placeholder="Inicio" style="flex: 1; padding-top: 1.2rem;">
+                                    <input type="date" id="fechaFinalFilter" placeholder="Fin" style="flex: 1; padding-top: 1.2rem;">
+                                </div>
+                                <div style="position: absolute; top: 2px; left: 6px; right: 6px; display: flex; gap: 6px; pointer-events: none;">
+                                    <span style="font-size: 0.65rem; color: #2c3e50; font-weight: 600; flex: 1;">Inicio</span>
+                                    <span style="font-size: 0.65rem; color: #2c3e50; font-weight: 600; flex: 1; text-align: right;">Fin</span>
+                                </div>
+                            </div>
+                            <div class="filter-actions">
+                                <button id="downloadPdf" class="download-pdf-btn">📥 Descargar PDF</button>
+                                <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                
-                <div class="filters-section">
-                    <div class="filter-row">
-                        <div class="filter-group">
-                            <input type="text" id="searchInput" placeholder="🔍 Buscar por palabra clave...">
-                        </div>
-                        <div class="filter-group">
-                            <select id="estadoFilter">
-                                <option value="">Todos los estados</option>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="en_progreso">En Progreso</option>
-                                <option value="completado">Completado</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <select id="tipoFilter">
-                                <option value="">Tipo de nota</option>
-                                <option value="avance">Avance</option>
-                                <option value="incidente">Incidente</option>
-                                <option value="observacion">Observación</option>
-                                <option value="reunion">Reunión</option>
-                                <option value="documento">Documento</option>
-                                <option value="fotografico">Registro Fotográfico</option>
-                                <option value="otro">Otro</option>
-                            </select>
-                        </div>
-                        <div class="filter-group">
-                            <input type="date" id="fechaFilter">
-                        </div>
-                        <button id="downloadPdf" class="download-pdf-btn">📥 Descargar PDF</button>
-                        <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
-                    </div>
-                </div>
-                    
+                     
                     <!-- Info de paginación -->
                     <div class="pagination-info" id="paginationInfo" style="text-align: center; margin: 1rem 0; color: #666; font-size: 0.9rem;">
                         Cargando entradas...
                     </div>
-                    
+                     
                     <!-- Loader -->
                     <div class="entries-loader" id="entriesLoader" style="text-align: center; margin: 1rem 0; display: none;">
                         <div class="loader-spinner"></div>
                         <p>Cargando más entradas...</p>
                     </div>
-                    
+                     
                     <!-- Botón cargar más -->
                     <div class="load-more-container" style="text-align: center; margin: 1rem 0;">
                         <button id="loadMoreBtn" class="load-more-btn" style="display: none;">
                             📄 Cargar más entradas
                         </button>
                     </div>
-                    
+                     
                     <div id="entriesList"></div>
                 </section>
             </main>
+        </div>
+    </div> <!-- Fin de #app -->
+
+    <!-- Modal de Gestión de Invitaciones -->
+    <div id="invitationModal" class="invitation-modal" style="display: none;">
+        <div class="invitation-modal-content">
+            <div class="invitation-modal-header">
+                <h3>🎫 Gestión de Códigos de Invitación</h3>
+                <button class="close-invitation-modal" onclick="closeInvitationModal()">✕</button>
+            </div>
+            <div class="invitation-modal-body">
+                <div class="create-code-section">
+                    <h4>✨ Generar Nuevo Código</h4>
+                    <form id="generateCodeForm">
+                        <div class="form-group">
+                            <label>Rol del usuario: *</label>
+                            <select id="codeRole" required>
+                                <option value="">Seleccionar rol</option>
+                                <option value="admin">Administrador</option>
+                                <option value="contratista">Contratista</option>
+                                <option value="interventoria">Interventoría</option>
+                                <option value="supervision">Supervisión del Contrato</option>
+                                <option value="ordenador_gasto">Ordenador del Gasto</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Vigencia (horas):</label>
+                            <input type="number" id="codeExpiration" value="48" min="1" max="168">
+                            <small>El código expira después de este tiempo</small>
+                        </div>
+                        <button type="submit" class="generate-code-btn">🎫 Generar Código</button>
+                    </form>
+                    <div id="generatedCodeResult" class="generated-code-result" style="display: none;">
+                        <div class="generated-code-box">
+                            <p class="code-label">Código de invitación:</p>
+                            <p class="code-value" id="generatedCode"></p>
+                            <button class="copy-code-btn" onclick="copyGeneratedCode()">📋 Copiar Código</button>
+                            <p class="code-instructions">
+                                Envía este código al usuario. Al registrarse, deberá ingresarlo para obtener su rol automáticamente.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="codes-list-section">
+                    <h4>📋 Códigos Generados</h4>
+                    <div id="codesList" class="codes-list">
+                        <p class="loading-codes">Cargando códigos...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Registro con Código -->
+    <div id="registerModal" class="register-modal" style="display: none;">
+        <div class="register-modal-content">
+            <div class="register-modal-header">
+                <h3>👤 Registro con Código de Invitación</h3>
+                <button class="close-register-modal" onclick="closeRegisterModal()">✕</button>
+            </div>
+            <div class="register-modal-body">
+                <form id="registerWithCodeForm">
+                    <div class="form-group">
+                        <label>Código de invitación: *</label>
+                        <input type="text" id="registerInvitationCode" required placeholder="Ejemplo: ABC12345" maxlength="8" style="text-transform: uppercase;">
+                        <small>Ingresa el código que te proporcionaron</small>
+                    </div>
+                    <div class="form-group">
+                        <label>Correo electrónico: *</label>
+                        <input type="email" id="registerEmail" required placeholder="tu@ejemplo.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Contraseña: *</label>
+                        <input type="password" id="registerPassword" required placeholder="Mínimo 6 caracteres" minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirmar contraseña: *</label>
+                        <input type="password" id="registerPasswordConfirm" required placeholder="Repite tu contraseña" minlength="6">
+                    </div>
+                    <button type="submit" class="register-btn">📝 Registrarse</button>
+                </form>
+                <div class="login-link">
+                    <p>¿Ya tienes cuenta? <a href="#" onclick="closeRegisterModal()">Inicia sesión</a></p>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -223,26 +325,26 @@
                         <span id="commentUserName"></span>
                     </div>
                     <textarea id="newComment" placeholder="Escribe tu comentario aquí..." rows="3"></textarea>
-                    
+                     
                     <!-- Sección de archivos para comentarios -->
                     <div class="comment-files-section">
                         <div class="comment-files-label">
-                            📎 Adjuntar archivos (imágenes, PDF, Word, Excel):
+                            📎 Adjuntar archivos (imágenes, PDF, Word, Excel, ZIP, AutoCAD):
                         </div>
-                        <input type="file" id="commentFiles" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                        <input type="file" id="commentFiles" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.dwg,.dxf,.dwf">
                         <div id="commentFilesPreview" class="comment-files-preview" style="display: none;">
                             <h4>📎 Archivos adjuntos:</h4>
                             <div id="commentFilesPreviewGrid" class="comment-files-preview-grid"></div>
                             <p class="comment-files-info">ℹ️ Los archivos seleccionados se adjuntarán al enviar el comentario</p>
                         </div>
                     </div>
-                    
+                     
                     <button id="submitComment" onclick="submitComment()">💬 Enviar Respuesta</button>
                 </div>
             </div>
         </div>
     </div>
-
+ 
     <script src="app.js"></script>
 </body>
 </html>

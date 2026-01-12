@@ -1,0 +1,213 @@
+/* Botones de Comentarios - CSS Separado */
+
+/* Botones de comentarios en las entradas */
+.comments-btn {
+    background: linear-gradient(135deg, #28a745, #218838);
+    color: white;
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.65rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.1rem;
+    justify-content: center;
+    min-width: 60px !important;
+    height: 28px !important;
+    white-space: nowrap;
+}
+
+.comments-btn:hover {
+    background: linear-gradient(135deg, #218838, #1e7e34);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.comments-btn:active {
+    transform: translateY(0px);
+}
+
+/* Icono de comentarios normal */
+.comments-btn::before {
+    content: "💬";
+    font-size: 0.8rem;
+    margin-right: 0.15rem;
+}
+
+/* Contador de comentarios */
+.comment-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 2px 4px;
+    border-radius: 10px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    margin-left: 3px;
+    min-width: 16px;
+    height: 16px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.comment-count:empty {
+    display: none;
+}
+
+/* Contador cuando hay muchos comentarios */
+.comment-count.has-many {
+    background: linear-gradient(135deg, #ff4757, #ff3838);
+    border: 1px solid rgba(255, 71, 87, 0.5);
+    animation: bounce 1s ease-in-out infinite;
+}
+
+/* Contador rojo para mensajes NO leídos */
+.comments-btn:not(.comments-read) .comment-count {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border: 1px solid rgba(231, 76, 60, 0.5);
+    box-shadow: 0 1px 3px rgba(231, 76, 60, 0.3);
+}
+
+/* Contador gris para mensajes SÍ leídos */
+.comments-read .comment-count {
+    background: #6c757d;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+    animation: none;
+}
+
+.comment-count:empty {
+    display: none;
+}
+
+.comment-count.has-many {
+    background: rgba(255, 193, 7, 0.3);
+    border: 1px solid rgba(255, 193, 7, 0.5);
+}
+
+.comments-read .comment-count {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Estilos específicos para botones de comentarios en versión móvil - MANTENER VERDE */
+.mobile-action-btn.comments-btn {
+    flex: 1;
+    min-width: 98px;
+    justify-content: center;
+    font-size: 0.85rem;
+    padding: 0.4rem 0.8rem;
+    height: 32px;
+    background: linear-gradient(135deg, #28a745, #218838) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2) !important;
+}
+
+.mobile-action-btn.comments-btn:hover {
+    background: linear-gradient(135deg, #218838, #1e7e34) !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+
+.mobile-action-btn.comments-btn:active {
+    transform: translateY(0px) !important;
+}
+
+/* Estilos para contadores en botones móviles */
+.mobile-action-btn.comments-btn .comment-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 2px 4px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 3px;
+    min-width: 18px;
+    height: 18px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* Contador rojo para mensajes NO leídos en móvil */
+.mobile-action-btn.comments-btn:not(.comments-read) .comment-count {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    border: 1px solid rgba(231, 76, 60, 0.5);
+    box-shadow: 0 1px 3px rgba(231, 76, 60, 0.3);
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 4px;
+    min-width: 18px;
+    height: 18px;
+}
+
+/* Contador gris para mensajes SÍ leídos en móvil */
+.mobile-action-btn.comments-btn.comments-read .comment-count {
+    background: #6c757d;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: none;
+    animation: none;
+}
+
+/* Indicador de comentarios no leídos */
+.mobile-action-btn.comments-btn:not(.comments-read):hover {
+    background: linear-gradient(135deg, #218838, #1e7e34) !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+    transform: translateY(-1px) !important;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+/* El botón siempre verde, solo el contador cambia */
+.comments-btn.comments-read {
+    /* El botón sigue verde, no cambia a gris */
+}
+
+.mobile-action-btn.comments-btn.comments-read {
+    /* El botón sigue verde, no cambia a gris */
+}
+
+/* Solo el contador cambia cuando está leído */
+.comments-read .comment-count {
+    background: #6c757d;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive para botones */
+@media (max-width: 480px) {
+    .comment-count.has-many {
+        min-width: 18px;
+        padding: 2px 4px;
+        height: 18px;
+    }
+}

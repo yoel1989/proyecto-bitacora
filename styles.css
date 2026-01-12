@@ -742,19 +742,26 @@ main {
   align-items: center;
 }
 
-.manage-users-btn {
-  background: #9b59b6;
-  color: white;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
+  .manage-users-btn {
+    background: linear-gradient(135deg, #9b59b6, #8e44ad) !important;
+    color: white !important;
+    border: none !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 5px !important;
+    cursor: pointer !important;
+    font-size: 0.85rem !important;
+    transition: background 0.3s !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.3rem !important;
+    box-shadow: 0 2px 8px rgba(155, 89, 182, 0.3) !important;
+  }
+
+  .manage-users-btn:hover {
+    background: linear-gradient(135deg, #8e44ad, #7d3c98) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(155, 89, 182, 0.4) !important;
+  }
 
 .manage-users-btn:hover {
   background: #8e44ad;
@@ -4129,12 +4136,22 @@ html {
 /* Responsive para móviles */
 @media (max-width: 768px) {
     .notification-dropdown {
-        position: fixed;
-        top: 60px;
-        right: 10px;
-        left: 10px;
-        width: auto;
-        max-height: 70vh;
+        position: fixed !important;
+        top: 60px !important;
+        right: 10px !important;
+        left: 10px !important;
+        width: auto !important;
+        max-height: 70vh !important;
+        z-index: 99999 !important;
+    }
+    
+    .notification-container {
+        display: inline-block !important;
+    }
+    
+    .notification-btn {
+        font-size: 1.3rem !important;
+        padding: 0.4rem !important;
     }
 }
 
@@ -4605,8 +4622,23 @@ html {
 @media (max-width: 768px) {
     .invitation-modal-content,
     .register-modal-content {
-        width: 95%;
-        padding: 1.5rem;
+        width: 95% !important;
+        max-width: none !important;
+        padding: 1.5rem !important;
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        margin: 0 !important;
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+    }
+    
+    .invitation-modal,
+    .register-modal {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
 
     .code-item {

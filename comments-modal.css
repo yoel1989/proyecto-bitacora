@@ -723,28 +723,33 @@ body .comments-modal .comments-modal-content,
 
 /* Botón de responder a comentarios */
 .comment-reply-btn {
-    background: linear-gradient(135deg, #17a2b8, #138496);
-    color: white;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
+    background: linear-gradient(135deg, #28a745, #218838) !important;
+    color: white !important;
+    border: none !important;
+    padding: 8px 16px !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    justify-content: center !important;
+    min-width: 100px !important;
+    height: 36px !important;
+    white-space: nowrap !important;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2) !important;
 }
 
 .comment-reply-btn:hover {
-    background: linear-gradient(135deg, #138496, #117a8b);
-    transform: translateY(-1px);
-    box-shadow: 0 3px 8px rgba(23, 162, 184, 0.3);
+    background: linear-gradient(135deg, #218838, #1e7e34) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
 }
 
 .comment-reply-btn:active {
-    transform: translateY(0px);
+    transform: translateY(0) !important;
 }
 
   .comment-files-preview-small .comment-file-preview-item img {
@@ -847,8 +852,15 @@ body .comments-modal .comments-modal-content,
   }
 
   .comment-reply-btn:hover {
-    background: linear-gradient(135deg, #138496, #117a8b) !important;
-    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.8) !important;
+    background: linear-gradient(135deg, #218838, #1e7e34) !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+  }
+  
+  .comment-reply-btn {
+    padding: 8px 16px !important;
+    font-size: 0.9rem !important;
+    min-width: 100px !important;
+    height: 36px !important;
   }
 }
 

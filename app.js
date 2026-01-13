@@ -1239,9 +1239,23 @@ function createMobileEntryCard(entry) {
     const card = document.createElement('div');
     card.className = 'mobile-entry-card';
     card.setAttribute('data-entry-id', entry.id); // Para actualizaciones en tiempo real
-    
-    // Formatear fecha con zona horaria local
-    const fechaFormateada = formatearFechaLocal(entry.fecha_hora || entry.fecha);
+
+    // Formatear fecha igual que en desktop (sin ajuste de zona horaria)
+    const fechaUsar = entry.fecha_hora || entry.fecha;
+    let fechaFormateada = '';
+
+    if (fechaUsar && fechaUsar.includes('T')) {
+        const [datePart, timePart] = fechaUsar.split('T');
+        const [year, month, day] = datePart.split('-');
+        const [hours, minutes] = timePart.split(':');
+        fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
+    } else if (fechaUsar) {
+        // Si no tiene hora, mostrar solo fecha
+        const [year, month, day] = fechaUsar.split('-');
+        fechaFormateada = `${day}/${month}/${year}`;
+    } else {
+        fechaFormateada = 'Fecha no disponible';
+    }
     
     // Crear archivos HTML para móvil
     // Mejorar detección de archivos con múltiples formatos posibles

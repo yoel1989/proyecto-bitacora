@@ -334,6 +334,11 @@ async function getUserProfile() {
             currentUser.role = 'contratista'; // Rol por defecto
             console.log('⚠️ No se encontró perfil, usando rol por defecto: contratista');
             document.getElementById('userRole').textContent = '(' + getRoleDisplayName('contratista') + ')';
+            // Ocultar botón de admin por defecto
+            const manageUsersBtn = document.getElementById('manageUsersBtn');
+            if (manageUsersBtn) {
+                manageUsersBtn.style.display = 'none';
+            }
         }
     } catch (error) {
         // Si hay error, asegurar que el email se muestre igual
@@ -342,6 +347,11 @@ async function getUserProfile() {
         currentUser.role = 'contratista';
         document.getElementById('userRole').textContent = '(' + getRoleDisplayName('contratista') + ')';
         console.warn('Error cargando perfil, usando datos por defecto:', error.message);
+        // Ocultar botón de admin en caso de error
+        const manageUsersBtn = document.getElementById('manageUsersBtn');
+        if (manageUsersBtn) {
+            manageUsersBtn.style.display = 'none';
+        }
     }
 }
 

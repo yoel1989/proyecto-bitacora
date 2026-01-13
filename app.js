@@ -2008,7 +2008,11 @@ async function checkAuth() {
             currentUser.role = 'user';
         }
         
-        // Verificar y mostrar/ocultar botón de administrador inmediatamente
+        // Establecer información básica inmediatamente
+        document.getElementById('userName').textContent = currentUser.email || 'Sin email';
+        document.getElementById('userRole').textContent = '(Cargando...)';
+        
+        // Ocultar botón de admin mientras carga, mostrar solo si es admin
         const manageUsersBtn = document.getElementById('manageUsersBtn');
         if (manageUsersBtn) {
             if (currentUser.role === 'admin') {
@@ -2018,16 +2022,6 @@ async function checkAuth() {
                 manageUsersBtn.style.display = 'none';
                 console.log('✅ Botón Agregar Usuarios ocultado (no admin)');
             }
-        }
-        
-        // Establecer información básica inmediatamente
-        document.getElementById('userName').textContent = currentUser.email || 'Sin email';
-        document.getElementById('userRole').textContent = '(Cargando...)';
-        
-        // Ocultar botón de admin mientras carga
-        const manageUsersBtn = document.getElementById('manageUsersBtn');
-        if (manageUsersBtn) {
-            manageUsersBtn.style.display = 'none';
         }
         
         // Mostrar aplicación principal inmediatamente
@@ -5000,9 +4994,9 @@ window.deleteEntry = deleteEntry;
 window.editEntry = editEntry;
 
 // Funciones de gestión de invitaciones
-const manageUsersBtn = document.getElementById('manageUsersBtn');
-if (manageUsersBtn) {
-    manageUsersBtn.addEventListener('click', function() {
+const manageUsersBtnEl = document.getElementById('manageUsersBtn');
+if (manageUsersBtnEl) {
+    manageUsersBtnEl.addEventListener('click', function() {
         console.log('👥 Click en botón de gestión de usuarios');
         console.log('👥 Rol del usuario actual:', currentUser.role);
         openInvitationModal();

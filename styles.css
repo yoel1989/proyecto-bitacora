@@ -751,7 +751,6 @@ main {
     cursor: pointer !important;
     font-size: 0.85rem !important;
     transition: background 0.3s !important;
-    display: inline-flex !important;
     align-items: center !important;
     gap: 0.3rem !important;
     box-shadow: 0 2px 8px rgba(155, 89, 182, 0.3) !important;

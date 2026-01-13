@@ -323,11 +323,17 @@ async function getUserProfile() {
             document.getElementById('userRole').textContent = '(' + getRoleDisplayName(data.rol) + ')';
             
             // Mostrar botón de invitaciones solo para admin
+            console.log('🔍 Verificando botón manageUsersBtn:');
+            console.log('   - Rol detectado:', data.rol);
+            console.log('   - ¿Es admin?:', data.rol === 'admin');
+            console.log('   - ¿Es admin (estricta)?:', data.rol === 'admin');
+            console.log('   - Tipo de rol:', typeof data.rol);
+            
             if (data.rol === 'admin') {
                 console.log('✅ Usuario es admin, mostrando botón de gestión');
                 document.getElementById('manageUsersBtn').style.display = 'block';
             } else {
-                console.log('ℹ️ Usuario no es admin, ocultando botón de gestión');
+                console.log('ℹ️ Usuario no es admin, ocultando botón de gestión. Rol:', data.rol);
                 document.getElementById('manageUsersBtn').style.display = 'none';
             }
         } else {

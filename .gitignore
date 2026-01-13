@@ -13,3 +13,5 @@ comando-*.txt
 *_backup.*
 temp-*
 *.tmp
+package-lock.json
+yarn.lock

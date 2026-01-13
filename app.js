@@ -327,7 +327,8 @@ async function getUserProfile() {
                 console.log('✅ Usuario es admin, mostrando botón de gestión');
                 document.getElementById('manageUsersBtn').style.display = 'block';
             } else {
-                console.log('ℹ️ Usuario no es admin, rol:', data.rol);
+                console.log('ℹ️ Usuario no es admin, ocultando botón de gestión');
+                document.getElementById('manageUsersBtn').style.display = 'none';
             }
         } else {
             currentUser.role = 'contratista'; // Rol por defecto

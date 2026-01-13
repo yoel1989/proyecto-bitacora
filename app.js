@@ -2008,9 +2008,27 @@ async function checkAuth() {
             currentUser.role = 'user';
         }
         
+        // Verificar y mostrar/ocultar botón de administrador inmediatamente
+        const manageUsersBtn = document.getElementById('manageUsersBtn');
+        if (manageUsersBtn) {
+            if (currentUser.role === 'admin') {
+                manageUsersBtn.style.display = 'block';
+                console.log('✅ Botón Agregar Usuarios mostrado (admin)');
+            } else {
+                manageUsersBtn.style.display = 'none';
+                console.log('✅ Botón Agregar Usuarios ocultado (no admin)');
+            }
+        }
+        
         // Establecer información básica inmediatamente
         document.getElementById('userName').textContent = currentUser.email || 'Sin email';
         document.getElementById('userRole').textContent = '(Cargando...)';
+        
+        // Ocultar botón de admin mientras carga
+        const manageUsersBtn = document.getElementById('manageUsersBtn');
+        if (manageUsersBtn) {
+            manageUsersBtn.style.display = 'none';
+        }
         
         // Mostrar aplicación principal inmediatamente
         showMain();

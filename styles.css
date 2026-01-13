@@ -4519,7 +4519,7 @@ html {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10001;
+    z-index: 99999;
     animation: fadeIn 0.3s ease;
 }
 
@@ -4533,6 +4533,8 @@ html {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     animation: slideUp 0.3s ease;
     width: 90%;
+    position: relative;
+    z-index: 2;
 }
 
 .register-modal-header {
@@ -4564,6 +4566,8 @@ html {
     justify-content: center;
     transition: all 0.3s ease;
     box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+    position: relative;
+    z-index: 10;
 }
 
 .close-register-modal:hover {
@@ -4666,13 +4670,6 @@ html {
         max-height: 90vh !important;
         overflow-y: auto !important;
     }
-    
-    .invitation-modal,
-    .register-modal {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
 
     .code-item {
         flex-direction: column;
@@ -4686,5 +4683,19 @@ html {
 
     .code-value {
         font-size: 1.5rem;
+    }
+  
+    .close-register-modal {
+        width: 36px;
+        height: 36px;
+        font-size: 1.2rem;
+        position: relative;
+        z-index: 10 !important;
+        flex-shrink: 0;
+    }
+  
+    .register-modal-header {
+        position: relative;
+        z-index: 5;
     }
 }

@@ -1,8 +1,56 @@
 // Supabase client está configurado en config.js
 // Asegúrate de que config.js se cargue antes que app.js
 
+// Cloudflare R2 Worker URL para almacenamiento de archivos
+const R2_WORKER_URL = 'https://bitacora-upload-worker.bitacoradeobra.workers.dev';
+
 // Importar servicio de email (solo en servidor)
 // const { notificarATodosUsuarios } = require('./email-service.js');
+
+// Funciones de Cloudflare R2
+async function uploadFileToR2(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('fileName', file.name);
+    
+    const response = await fetch(`${R2_WORKER_URL}/upload`, {
+        method: 'POST',
+        body: formData
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error subiendo archivo');
+    }
+    
+    return await response.json();
+}
+
+async function deleteFileFromR2(fileName) {
+    const response = await fetch(`${R2_WORKER_URL}/delete/${fileName}`, {
+        method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        console.warn('No se pudo eliminar archivo:', error.error);
+    }
+}
+
+async function deleteMultipleFilesFromR2(archivos) {
+    const deletePromises = archivos.map(archivo => {
+        const url = typeof archivo === 'string' ? archivo : archivo.url;
+        if (!url) return Promise.resolve();
+        
+        const urlParts = url.split('/download/');
+        if (urlParts.length > 1) {
+            return deleteFileFromR2(urlParts[1]);
+        }
+        return Promise.resolve();
+    });
+    
+    await Promise.all(deletePromises);
+}
 
 // Ignorar errores no relacionados con la aplicación (como MetaMask)
 window.addEventListener('error', function(e) {
@@ -298,11 +346,11 @@ async function getUserProfile() {
     if (!currentUser) return;
     
     try {
-        // Consulta optimizada con timeout para obtener rol
+        // Consulta optimizada con timeout para obtener rol y nombre
         const { data, error } = await Promise.race([
             supabaseClient
                 .from('profiles')
-                .select('rol, email')
+                .select('rol, email, nombre')
                 .eq('id', currentUser.id)
                 .single(),
             new Promise((_, reject) => 
@@ -310,50 +358,36 @@ async function getUserProfile() {
             )
         ]);
         
-        // Asegurar que el email siempre se muestre desde el auth de Supabase
-        const userEmail = currentUser.email || 'Usuario desconocido';
-        document.getElementById('userName').textContent = userEmail;
-        
         if (data) {
-            currentUser.role = data.rol; // Guardar el rol
+            currentUser.role = data.rol;
+            currentUser.name = data.nombre;
             console.log('👤 Rol del usuario:', data.rol);
-            // Usar email del perfil si existe, sino el del auth
-            const displayEmail = data.email || userEmail;
-            document.getElementById('userName').textContent = displayEmail;
+            console.log('👤 Nombre del usuario:', data.nombre);
+            
+            const displayName = data.nombre || currentUser.email || 'Usuario desconocido';
+            document.getElementById('userName').textContent = displayName;
             document.getElementById('userRole').textContent = '(' + getRoleDisplayName(data.rol) + ')';
             
-            // Mostrar botón de invitaciones solo para admin
-            console.log('🔍 Verificando botón manageUsersBtn:');
-            console.log('   - Rol detectado:', data.rol);
-            console.log('   - ¿Es admin?:', data.rol === 'admin');
-            console.log('   - ¿Es admin (estricta)?:', data.rol === 'admin');
-            console.log('   - Tipo de rol:', typeof data.rol);
-            
             if (data.rol === 'admin') {
-                console.log('✅ Usuario es admin, mostrando botón de gestión');
                 document.getElementById('manageUsersBtn').style.display = 'block';
             } else {
-                console.log('ℹ️ Usuario no es admin, ocultando botón de gestión. Rol:', data.rol);
                 document.getElementById('manageUsersBtn').style.display = 'none';
             }
         } else {
-            currentUser.role = 'contratista'; // Rol por defecto
-            console.log('⚠️ No se encontró perfil, usando rol por defecto: contratista');
+            currentUser.role = 'contratista';
+            const displayName = currentUser.email || 'Usuario desconocido';
+            document.getElementById('userName').textContent = displayName;
             document.getElementById('userRole').textContent = '(' + getRoleDisplayName('contratista') + ')';
-            // Ocultar botón de admin por defecto
             const manageUsersBtn = document.getElementById('manageUsersBtn');
             if (manageUsersBtn) {
                 manageUsersBtn.style.display = 'none';
             }
         }
     } catch (error) {
-        // Si hay error, asegurar que el email se muestre igual
-        const userEmail = currentUser.email || 'Usuario desconocido';
-        document.getElementById('userName').textContent = userEmail;
+        const displayName = currentUser.email || 'Usuario desconocido';
+        document.getElementById('userName').textContent = displayName;
         currentUser.role = 'contratista';
         document.getElementById('userRole').textContent = '(' + getRoleDisplayName('contratista') + ')';
-        console.warn('Error cargando perfil, usando datos por defecto:', error.message);
-        // Ocultar botón de admin en caso de error
         const manageUsersBtn = document.getElementById('manageUsersBtn');
         if (manageUsersBtn) {
             manageUsersBtn.style.display = 'none';
@@ -549,30 +583,15 @@ async function handleBitacoraSubmit(e) {
                 const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const fileName = `${Date.now()}_${cleanFileName}`;
                 
-                const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                    .from('archivos-obra')
-                    .upload(fileName, file, {
-                        cacheControl: '3600',
-                        upsert: false,
-                        contentType: file.type
-                    });
+                // Subir archivo a Cloudflare R2
+                const uploadData = await uploadFileToR2(file);
                 
-                if (uploadError) {
-                    console.error('Error subiendo archivo:', uploadError);
-                    alert(`Error al subir el archivo "${file.name}": ${uploadError.message}`);
-                    continue; // Importante: no procesar este archivo si hubo error
-                } else {
-                    const { data: urlData } = supabaseClient.storage
-                        .from('archivos-obra')
-                        .getPublicUrl(fileName);
-                    
-                    newArchivoUrls.push({
-                        url: urlData.publicUrl,
-                        name: file.name,
-                        type: file.type,
-                        size: file.size
-                    });
-                }
+                newArchivoUrls.push({
+                    url: uploadData.url,
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                });
             }
             
             if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
@@ -621,30 +640,15 @@ async function handleBitacoraSubmit(e) {
                 const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const fileName = `${Date.now()}_${cleanFileName}`;
                 
-                const { data: uploadData, error: uploadError } = await supabaseClient.storage
-                    .from('archivos-obra')
-                    .upload(fileName, file, {
-                        cacheControl: '3600',
-                        upsert: false,
-                        contentType: file.type
-                    });
+                // Subir archivo a Cloudflare R2
+                const uploadData = await uploadFileToR2(file);
                 
-                if (uploadError) {
-                    console.error('Error subiendo archivo:', uploadError);
-                    alert(`Error al subir el archivo "${file.name}": ${uploadError.message}`);
-                    continue; // Importante: no procesar este archivo si hubo error
-                } else {
-                    const { data: urlData } = supabaseClient.storage
-                        .from('archivos-obra')
-                        .getPublicUrl(fileName);
-                    
-                    archivoUrls.push({
-                        url: urlData.publicUrl,
-                        name: file.name,
-                        type: file.type,
-                        size: file.size
-                    });
-    }
+                archivoUrls.push({
+                    url: uploadData.url,
+                    name: file.name,
+                    type: file.type,
+                    size: file.size
+                });
             }
             
 }           
@@ -1878,25 +1882,7 @@ async function deleteEntry(entryId) {
             const archivos = entry.archivos || entry.fotos || [];
             if (archivos.length > 0) {
                 console.log('🗂️ Eliminando', archivos.length, 'archivos del storage...');
-                for (const archivo of archivos) {
-                    try {
-                        // El archivo puede ser un objeto {url, name, ...} o un string
-                        const archivoUrl = typeof archivo === 'string' ? archivo : archivo.url;
-                        if (!archivoUrl) continue;
-
-                        // Extraer el path del archivo desde la URL
-                        const urlParts = archivoUrl.split('/storage/v1/object/public/');
-                        if (urlParts.length > 1) {
-                            const pathParts = urlParts[1].split('/');
-                            const bucket = pathParts[0];
-                            const filePath = pathParts.slice(1).join('/');
-                            await supabaseClient.storage.from(bucket).remove([filePath]);
-                            console.log('✅ Archivo eliminado:', filePath);
-                        }
-                    } catch (storageError) {
-                        console.warn('⚠️ No se pudo eliminar archivo:', storageError.message);
-                    }
-                }
+                await deleteMultipleFilesFromR2(archivos);
             }
 
             // 3. Eliminar archivos de comentarios
@@ -1908,22 +1894,7 @@ async function deleteEntry(entryId) {
             if (comentarios) {
                 for (const comentario of comentarios) {
                     const archivosComentario = comentario.archivos || [];
-                    for (const archivo of archivosComentario) {
-                        try {
-                            const archivoUrl = typeof archivo === 'string' ? archivo : archivo.url;
-                            if (!archivoUrl) continue;
-
-                            const urlParts = archivoUrl.split('/storage/v1/object/public/');
-                            if (urlParts.length > 1) {
-                                const pathParts = urlParts[1].split('/');
-                                const bucket = pathParts[0];
-                                const filePath = pathParts.slice(1).join('/');
-                                await supabaseClient.storage.from(bucket).remove([filePath]);
-                            }
-                        } catch (e) {
-                            console.warn('⚠️ Error eliminando archivo de comentario:', e.message);
-                        }
-                    }
+                    await deleteMultipleFilesFromR2(archivosComentario);
                 }
             }
 
@@ -2028,8 +1999,8 @@ async function checkAuth() {
             currentUser.role = 'user';
         }
         
-        // Establecer información básica inmediatamente
-        document.getElementById('userName').textContent = currentUser.email || 'Sin email';
+        const displayName = currentUser.email || 'Sin email';
+        document.getElementById('userName').textContent = displayName;
         document.getElementById('userRole').textContent = '(Cargando...)';
         
         // Ocultar botón de admin mientras carga, mostrar solo si es admin
@@ -3516,34 +3487,14 @@ async function uploadCommentFiles(files, commentId) {
                 continue;
             }
             
-            // Generar nombre único
-            const fileExt = file.name.split('.').pop();
-            const timestamp = Date.now();
-            const random = Math.random().toString(36).substring(2, 9);
-            const fileName = `comentario_${timestamp}_${random}.${fileExt}`;
-            const filePath = `comentarios/${fileName}`;
             
-            // Subir a Supabase Storage - Usar bucket específico para comentarios
-            const { data, error } = await supabaseClient.storage
-                .from('comentarios-archivos')
-                .upload(filePath, file);
-            
-            if (error) {
-                console.error('Error subiendo archivo:', error);
-                continue;
-            }
-            
-            // Obtener URL pública
-            const { data: { publicUrl } } = supabaseClient.storage
-                .from('comentarios-archivos')
-                .getPublicUrl(filePath);
+            const uploadData = await uploadFileToR2(file);
             
             uploadedFiles.push({
                 name: file.name,
                 size: file.size,
                 type: file.type,
-                url: publicUrl,
-                path: filePath
+                url: uploadData.url
             });
             
         } catch (error) {
@@ -5164,6 +5115,7 @@ document.getElementById('registerWithCodeForm')?.addEventListener('submit', asyn
     e.preventDefault();
     
     const code = document.getElementById('registerInvitationCode').value.trim().toUpperCase();
+    const name = document.getElementById('registerName').value.trim();
     const email = document.getElementById('registerEmail').value.trim();
     const password = document.getElementById('registerPassword').value;
     const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
@@ -5175,6 +5127,11 @@ document.getElementById('registerWithCodeForm')?.addEventListener('submit', asyn
     
     if (password.length < 6) {
         showNotification('❌ La contraseña debe tener al menos 6 caracteres', 'error');
+        return;
+    }
+    
+    if (name.length < 2) {
+        showNotification('❌ El nombre debe tener al menos 2 caracteres', 'error');
         return;
     }
     
@@ -5198,6 +5155,15 @@ document.getElementById('registerWithCodeForm')?.addEventListener('submit', asyn
             if (roleError) {
                 showNotification('❌ Error: ' + roleError.message, 'error');
                 return;
+            }
+            
+            const { error: updateError } = await supabaseClient
+                .from('profiles')
+                .update({ nombre: name })
+                .eq('id', authData.user.id);
+            
+            if (updateError) {
+                console.warn('⚠️ Error actualizando nombre:', updateError);
             }
             
             showNotification('✅ Registro exitoso. Ahora puedes iniciar sesión.', 'success');

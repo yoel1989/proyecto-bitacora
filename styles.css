@@ -4108,10 +4108,18 @@ html {
     min-width: 18px;
     height: 18px;
     border-radius: 50%;
-    display: flex !important;
+    display: none;
     align-items: center;
     justify-content: center;
     animation: pulse 2s infinite;
+}
+
+.notification-count.visible {
+    display: inline-flex !important;
+}
+
+.notification-count.hidden {
+    display: none !important;
 }
 
 @keyframes pulse {
@@ -4254,14 +4262,30 @@ html {
         max-height: 70vh !important;
         z-index: 99999 !important;
     }
-    
+
     .notification-container {
         display: inline-block !important;
+        position: relative !important;
     }
-    
+
     .notification-btn {
         font-size: 1.3rem !important;
         padding: 0.4rem !important;
+        position: relative !important;
+    }
+
+    .notification-count {
+        position: absolute !important;
+        top: -2px !important;
+        right: -2px !important;
+        font-size: 0.65rem !important;
+        min-width: 20px !important;
+        height: 20px !important;
+        z-index: 10 !important;
+    }
+
+    .notification-count.visible {
+        display: inline-flex !important;
     }
 }
 

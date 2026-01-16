@@ -2669,13 +2669,15 @@ function updateNotificationUI() {
 
     // Actualizar contador
     if (countElement) {
+        countElement.textContent = unreadNotificationCount > 99 ? '99+' : unreadNotificationCount;
+
         if (unreadNotificationCount > 0) {
-            countElement.textContent = unreadNotificationCount > 99 ? '99+' : unreadNotificationCount;
-            countElement.style.display = 'inline-flex';
+            countElement.classList.add('visible');
+            countElement.classList.remove('hidden');
             console.log('✅ Contador actualizado y mostrado:', countElement.textContent);
         } else {
-            countElement.textContent = '0';
-            countElement.style.display = 'none';
+            countElement.classList.remove('visible');
+            countElement.classList.add('hidden');
             console.log('ℹ️ Contador oculto (0 notificaciones)');
         }
     } else {

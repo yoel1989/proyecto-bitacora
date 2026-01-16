@@ -2595,10 +2595,10 @@ async function updateCommentCount(bitacoraId) {
     }
 }
 
-    // Limitar a 50 notificaciones
-    if (notifications.length > 50) {
-        notifications = notifications.slice(0, 50);
-    }
+// Agregar notificación a la lista (versión original)
+function addNotificationOriginal(notification) {
+    notifications.unshift(notification);
+    unreadNotificationCount++;
 
     updateNotificationUI();
 

@@ -2495,16 +2495,19 @@ async function handleNewEntryNotification(payload) {
 
     addNotification(notification);
     console.log('🔔 Nueva entrada:', newEntry.titulo);
-    
+
     // Animar la campana
     const btn = document.getElementById('notificationBtn');
     console.log('🔔 Botón de notificaciones encontrado (entrada):', !!btn);
-    
+
     if (btn) {
         btn.classList.add('has-notifications');
         setTimeout(() => btn.classList.remove('has-notifications'), 500);
     }
-    
+
+    // Mostrar toast
+    showNotification(`🔔 ${notification.title}: ${notification.message}`, 'info', 3000);
+
     // Recargar entradas para mostrar la nueva
     try {
         await loadBitacoraEntries(currentPage, false);

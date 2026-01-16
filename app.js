@@ -2576,16 +2576,33 @@ async function updateCommentCount(bitacoraId) {
         
         // Actualizar el DOM
         const entryElements = document.querySelectorAll(`[data-entry-id="${bitacoraId}"]`);
+        console.log('🔍 Elementos encontrados para actualizar:', {
+            bitacoraId,
+            elementCount: entryElements.length,
+            elements: Array.from(entryElements).map(el => ({
+                className: el.className,
+                innerHTML: el.innerHTML.substring(0, 200)
+            }))
+        });
+        
         entryElements.forEach(element => {
             // Buscar el contador de comentarios en el elemento
             const countSpan = element.querySelector('.comment-count');
+            console.log('🔍 CountSpan encontrado:', {
+                exists: !!countSpan,
+                currentText: countSpan ? countSpan.textContent : 'N/A'
+            });
+            
             if (countSpan) {
                 countSpan.textContent = newCount;
                 // Quitar clase de leído si existe
                 const commentsBtn = element.querySelector('.comments-btn, .mobile-action-btn.comments-btn');
                 if (commentsBtn) {
                     commentsBtn.classList.remove('comments-read');
+                    console.log('✅ Clase comments-read removida del botón');
                 }
+            } else {
+                console.log('⚠️ No se encontró .comment-count en el elemento');
             }
         });
         

@@ -2576,6 +2576,8 @@ function addNotification(notification) {
     notifications.unshift(notification);
     unreadNotificationCount++;
 
+    console.log('🔔 addNotification llamado:', { notification, unreadNotificationCount, notificationsLength: notifications.length });
+
     // Actualizar contador en UI
     updateNotificationUI();
 
@@ -2663,14 +2665,21 @@ function updateNotificationUI() {
     const countElement = document.getElementById('notificationCount');
     const listElement = document.getElementById('notificationList');
 
+    console.log('🔔 updateNotificationUI llamado:', { unreadNotificationCount, countElement: !!countElement, currentDisplay: countElement?.style.display, currentText: countElement?.textContent });
+
     // Actualizar contador
     if (countElement) {
         if (unreadNotificationCount > 0) {
             countElement.textContent = unreadNotificationCount > 99 ? '99+' : unreadNotificationCount;
-            countElement.style.display = 'flex';
+            countElement.style.display = 'inline-flex';
+            console.log('✅ Contador actualizado y mostrado:', countElement.textContent);
         } else {
+            countElement.textContent = '0';
             countElement.style.display = 'none';
+            console.log('ℹ️ Contador oculto (0 notificaciones)');
         }
+    } else {
+        console.error('❌ No se encontró el elemento notificationCount');
     }
 
     // Actualizar lista
@@ -2736,6 +2745,9 @@ function setupNotificationUI() {
     const btn = document.getElementById('notificationBtn');
     const dropdown = document.getElementById('notificationDropdown');
     const markAllBtn = document.getElementById('markAllRead');
+    const countElement = document.getElementById('notificationCount');
+
+    console.log('🔔 setupNotificationUI llamado:', { btn: !!btn, dropdown: !!dropdown, markAllBtn: !!markAllBtn, countElement: !!countElement });
 
     if (btn) {
         btn.addEventListener('click', (e) => {

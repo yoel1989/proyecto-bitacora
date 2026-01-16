@@ -1676,6 +1676,29 @@ function showAllArchivos(entryId) {
     }
 }
 
+// Ver imagen en pantalla completa
+function viewImageFullscreen(url, name) {
+    const fullscreenModal = document.createElement('div');
+    fullscreenModal.className = 'fullscreen-image-modal';
+    fullscreenModal.innerHTML = `
+        <div class="fullscreen-content">
+            <button class="fullscreen-close" onclick="this.closest('.fullscreen-image-modal').remove()">✕</button>
+            <img src="${url}" alt="${name}" />
+            <div class="fullscreen-info">${name}</div>
+        </div>
+    `;
+    document.body.appendChild(fullscreenModal);
+    
+    // Cerrar con ESC
+    const closeHandler = (e) => {
+        if (e.key === 'Escape') {
+            fullscreenModal.remove();
+            document.removeEventListener('keydown', closeHandler);
+        }
+    };
+    document.addEventListener('keydown', closeHandler);
+}
+
 // Mantener compatibilidad con función anterior
 function showAllPhotos(entryId) {
     showAllArchivos(entryId);

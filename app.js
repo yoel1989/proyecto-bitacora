@@ -2541,6 +2541,16 @@ async function handleNewCommentNotification(payload) {
         // Si el modal no está abierto, actualizar contador en la lista de entradas
         await updateCommentCount(newComment.bitacora_id);
     }
+    
+    // Animar la campana
+    const btn = document.getElementById('notificationBtn');
+    if (btn) {
+        btn.classList.add('has-notifications');
+        setTimeout(() => btn.classList.remove('has-notifications'), 500);
+    }
+    
+    // Mostrar toast
+    showNotification(`🔔 ${notification.title}: ${notification.message}`, 'info', 3000);
 }
 
 // Agregar notificación a la lista

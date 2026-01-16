@@ -2485,6 +2485,15 @@ async function handleNewEntryNotification(payload) {
     addNotification(notification);
     console.log('🔔 Nueva entrada:', newEntry.titulo);
     
+    // Animar la campana
+    const btn = document.getElementById('notificationBtn');
+    console.log('🔔 Botón de notificaciones encontrado (entrada):', !!btn);
+    
+    if (btn) {
+        btn.classList.add('has-notifications');
+        setTimeout(() => btn.classList.remove('has-notifications'), 500);
+    }
+    
     // Recargar entradas para mostrar la nueva
     try {
         await loadBitacoraEntries(currentPage, false);
@@ -2544,9 +2553,18 @@ async function handleNewCommentNotification(payload) {
     
     // Animar la campana
     const btn = document.getElementById('notificationBtn');
+    console.log('🔔 Botón de notificaciones encontrado:', !!btn, {
+        hasClass: btn ? btn.classList.contains('has-notifications') : 'N/A',
+        innerHTML: btn ? btn.innerHTML : 'N/A',
+        display: btn ? btn.style.display : 'N/A'
+    });
+    
     if (btn) {
         btn.classList.add('has-notifications');
         setTimeout(() => btn.classList.remove('has-notifications'), 500);
+        console.log('✅ Clase has-notifications agregada al botón');
+    } else {
+        console.error('❌ No se encontró el botón de notificaciones');
     }
     
     // Mostrar toast

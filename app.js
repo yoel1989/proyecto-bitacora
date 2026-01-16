@@ -2422,6 +2422,7 @@ function showNotification(message, type = 'info', duration = 3000) {
 // Sistema de notificaciones en tiempo real
 async function initializeRealtimeNotifications() {
     console.log('📡 Inicializando sistema de notificaciones en tiempo real...');
+    console.log('📡 Usuario actual ID:', currentUser?.id);
 
     try {
         // Suscribirse a nuevas entradas
@@ -2433,9 +2434,14 @@ async function initializeRealtimeNotifications() {
                     schema: 'public',
                     table: 'bitacora'
                 },
-                (payload) => handleNewEntryNotification(payload)
+                (payload) => {
+                    console.log('📡 Recibido evento INSERT en bitacora:', payload);
+                    handleNewEntryNotification(payload);
+                }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('📡 Estado de suscripción entriesChannel:', status);
+            });
 
         // Suscribirse a nuevos comentarios
         const commentsChannel = supabaseClient
@@ -2446,9 +2452,14 @@ async function initializeRealtimeNotifications() {
                     schema: 'public',
                     table: 'comentarios'
                 },
-                (payload) => handleNewCommentNotification(payload)
+                (payload) => {
+                    console.log('📡 Recibido evento INSERT en comentarios:', payload);
+                    handleNewCommentNotification(payload);
+                }
             )
-            .subscribe();
+            .subscribe((status) => {
+                console.log('📡 Estado de suscripción commentsChannel:', status);
+            });
 
         notificationChannel = { entriesChannel, commentsChannel };
         console.log('✅ Sistema de notificaciones activado');

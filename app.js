@@ -2577,7 +2577,7 @@ function addNotification(notification) {
     unreadNotificationCount++;
 
     // Actualizar contador en UI
-    updateNotificationBadge();
+    updateNotificationUI();
 
     // Limitar a 50 notificaciones
     if (notifications.length > 50) {

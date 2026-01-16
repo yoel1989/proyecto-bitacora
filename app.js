@@ -972,90 +972,138 @@ function updateExistingEntriesWithEmails(entries) {
 let isFiltering = false;
 
 // Filtrar y mostrar entradas con debounce para mejor rendimiento
-function filterAndDisplayEntries() {
+async function filterAndDisplayEntries() {
     if (isFiltering) {
         console.log('⏳ Ya se está filtrando, omitiendo...');
         return;
     }
-    
+
     console.log('🔍 filterAndDisplayEntries iniciado');
     console.log('🔍 allEntries:', allEntries.length, 'entradas');
-    
+
     isFiltering = true;
-    
+
     let filteredEntries = [...allEntries];
-    
-    // Filtrar por búsqueda (usando índice optimizado)
+
+    // Verificar si hay filtros que requieran cargar todas las entradas de la base de datos
+    const tipoFilter = document.getElementById('tipoFilter').value;
+    const ubicacionFilter = document.getElementById('ubicacionFilter').value;
+    const fechaInicioFilter = document.getElementById('fechaInicioFilter').value;
+    const fechaFinalFilter = document.getElementById('fechaFinalFilter').value;
+    const hasAdvancedFilters = tipoFilter || ubicacionFilter || fechaInicioFilter || fechaFinalFilter;
+
+    // Si hay filtros avanzados, cargar todas las entradas de la base de datos
+    if (hasAdvancedFilters) {
+        console.log('🔍 Filtros avanzados detectados, cargando todas las entradas...');
+
+        try {
+            let query = supabaseClient
+                .from('bitacora')
+                .select('*', { count: 'exact' })
+                .order('fecha', { ascending: false });
+
+            // Aplicar filtros en la consulta SQL
+            if (tipoFilter) {
+                query = query.eq('tipo_nota', tipoFilter);
+            }
+
+            if (ubicacionFilter) {
+                query = query.eq('ubicacion', ubicacionFilter);
+            }
+
+            if (fechaInicioFilter) {
+                const inicio = new Date(fechaInicioFilter + 'T00:00:00').toISOString();
+                query = query.gte('fecha', inicio);
+            }
+
+            if (fechaFinalFilter) {
+                const fin = new Date(fechaFinalFilter + 'T23:59:59').toISOString();
+                query = query.lte('fecha', fin);
+            }
+
+            // Cargar todas las entradas sin límite
+            const { data: allData, error, count } = await query;
+
+            if (error) {
+                console.error('Error cargando todas las entradas para filtros:', error);
+                showNotification('❌ Error al aplicar filtros', 'error');
+                isFiltering = false;
+                return;
+            }
+
+            filteredEntries = allData || [];
+            totalEntries = count || 0;
+            console.log('🔍 Cargadas', filteredEntries.length, 'entradas con filtros aplicados');
+
+            // Cargar emails de usuarios para las entradas filtradas
+            if (filteredEntries.length > 0) {
+                const userIds = [...new Set(filteredEntries.map(entry => entry.user_id).filter(id => id))];
+
+                if (userIds.length > 0) {
+                    const { data: profiles, error: profilesError } = await supabaseClient
+                        .from('profiles')
+                        .select('id, email')
+                        .in('id', userIds);
+
+                    if (!profilesError && profiles) {
+                        const userEmails = {};
+                        profiles.forEach(profile => {
+                            if (profile.email) {
+                                userEmails[profile.id] = profile.email;
+                            }
+                        });
+
+                        filteredEntries.forEach(entry => {
+                            if (userEmails[entry.user_id]) {
+                                entry.profiles = { email: userEmails[entry.user_id] };
+                            }
+                        });
+                    }
+                }
+            }
+
+        } catch (error) {
+            console.error('Error al cargar entradas filtradas:', error);
+            showNotification('❌ Error al aplicar filtros', 'error');
+            isFiltering = false;
+            return;
+        }
+    } else {
+        console.log('🔍 Sin filtros avanzados, usando entradas cargadas');
+    }
+
+    // Filtrar por búsqueda (siempre se hace en JavaScript)
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     console.log('🔍 searchTerm:', searchTerm);
     if (searchTerm) {
         filteredEntries = optimizedSearch(searchTerm, filteredEntries);
         console.log('🔍 Después de search:', filteredEntries.length);
     }
-    
-    // Filtrar por tipo de nota
-    const tipoFilter = document.getElementById('tipoFilter').value;
+
     console.log('🔍 tipoFilter:', tipoFilter);
-    if (tipoFilter) {
-        filteredEntries = filteredEntries.filter(entry => entry.tipo_nota === tipoFilter);
-        console.log('🔍 Después de tipo:', filteredEntries.length);
-    }
-    
-    // Filtrar por ubicación
-    const ubicacionFilter = document.getElementById('ubicacionFilter').value;
     console.log('🔍 ubicacionFilter:', ubicacionFilter);
-    if (ubicacionFilter) {
-        filteredEntries = filteredEntries.filter(entry => entry.ubicacion === ubicacionFilter);
-        console.log('🔍 Después de ubicación:', filteredEntries.length);
-    }
-    
-    // Filtrar por rango de fechas
-    const fechaInicioFilter = document.getElementById('fechaInicioFilter').value;
-    const fechaFinalFilter = document.getElementById('fechaFinalFilter').value;
-    
-    if (fechaInicioFilter && fechaFinalFilter) {
-        filteredEntries = filteredEntries.filter(entry => {
-            // Debug: console.log('Entrada fecha:', entry.fecha, 'Tipo:', typeof entry.fecha);
-            const entryDate = new Date(entry.fecha || entry.fecha_hora);
-            const fechaInicio = new Date(fechaInicioFilter);
-            const fechaFinal = new Date(fechaFinalFilter);
-            
-            // Extraer componentes de fecha directamente del string para evitar problemas de timezone
-            const entryDateString = (entry.fecha || entry.fecha_hora).split('T')[0];
-            const entryDateOnly = new Date(entryDateString + 'T00:00:00');
-            const fechaInicioOnly = new Date(fechaInicioFilter + 'T00:00:00');
-            const fechaFinalOnly = new Date(fechaFinalFilter + 'T23:59:59');
-            
-            // Debug: console.log('Comparación:', entryDateOnly.toISOString(), '>=', fechaInicioOnly.toISOString(), '&& <=', fechaFinalOnly.toISOString());
-            
-            return entryDateOnly >= fechaInicioOnly && entryDateOnly <= fechaFinalOnly;
-        });
-    } else if (fechaInicioFilter) {
-        // Si solo hay fecha de inicio, filtrar desde esa fecha en adelante
-        filteredEntries = filteredEntries.filter(entry => {
-            const entryDate = new Date(entry.fecha || entry.fecha_hora);
-            const fechaInicio = new Date(fechaInicioFilter);
-            // Normalizar fechas para comparar solo el día
-            const entryDateOnly = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
-            const fechaInicioOnly = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate());
-            return entryDateOnly >= fechaInicioOnly;
-        });
-    } else if (fechaFinalFilter) {
-        // Si solo hay fecha final, filtrar hasta esa fecha (incluyendo todo el día)
-        filteredEntries = filteredEntries.filter(entry => {
-            const entryDate = new Date(entry.fecha || entry.fecha_hora);
-            const fechaFinal = new Date(fechaFinalFilter);
-            // Normalizar fechas para comparar solo el día
-            const entryDateOnly = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
-            const fechaFinalOnly = new Date(fechaFinal.getFullYear(), fechaFinal.getMonth(), fechaFinal.getDate());
-            return entryDateOnly <= fechaFinalOnly;
-        });
-    }
-    
+
     // Usar await para asegurar que displayEntries se complete antes de continuar
-    displayEntries(filteredEntries).then(() => {
-        isFiltering = false;
-    });
+    await displayEntries(filteredEntries);
+
+    // Actualizar contadores
+    updateEntriesCounter(filteredEntries);
+
+    const paginationInfo = document.getElementById('paginationInfo');
+    if (paginationInfo) {
+        const count = filteredEntries.length;
+        paginationInfo.innerHTML = `
+            ${hasAdvancedFilters ? `Mostrando ${count} entradas filtradas` : `Mostrando ${count} de ${totalEntries} entradas`}
+        `;
+    }
+
+    // Ocultar botón de cargar más si hay filtros
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        loadMoreBtn.style.display = hasAdvancedFilters ? 'none' : (allEntries.length >= totalEntries ? 'none' : 'block');
+    }
+
+    isFiltering = false;
 }
 
 // Debounce para búsqueda (mejora rendimiento)

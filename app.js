@@ -2517,14 +2517,29 @@ async function handleNewCommentNotification(payload) {
 
     addNotification(notification);
     
-    // Recargar comentarios si el modal está abierto
-    if (currentBitacoraId && newComment.bitacora_id === currentBitacoraId) {
+    // Verificar si el modal de comentarios está abierto
+    const commentsModal = document.getElementById('commentsModal');
+    const isModalOpen = commentsModal && commentsModal.style.display !== 'none';
+    
+    console.log('📝 Nuevo comentario recibido:', {
+        commentId: newComment.id,
+        bitacoraId: newComment.bitacora_id,
+        currentBitacoraId: currentBitacoraId,
+        isModalOpen: isModalOpen,
+        isMatching: currentBitacoraId === newComment.bitacora_id
+    });
+    
+    // Recargar comentarios si el modal está abierto y coincide el ID
+    if (isModalOpen && currentBitacoraId && newComment.bitacora_id === currentBitacoraId) {
         try {
             await loadComments(currentBitacoraId);
-            console.log('🔄 Comentarios recargados automáticamente');
+            console.log('🔄 Comentarios recargados automáticamente en modal');
         } catch (error) {
             console.error('❌ Error recargando comentarios:', error);
         }
+    } else {
+        // Si el modal no está abierto, actualizar contador en la lista de entradas
+        await updateCommentCount(newComment.bitacora_id);
     }
 }
 
@@ -2532,6 +2547,53 @@ async function handleNewCommentNotification(payload) {
 function addNotification(notification) {
     notifications.unshift(notification);
     unreadNotificationCount++;
+
+    // Actualizar contador en UI
+    updateNotificationBadge();
+
+    // Limitar a 50 notificaciones
+    if (notifications.length > 50) {
+        notifications = notifications.slice(0, 50);
+    }
+}
+
+// Actualizar contador de comentarios en una entrada específica
+async function updateCommentCount(bitacoraId) {
+    try {
+        // Buscar la entrada en allEntries
+        const entryIndex = allEntries.findIndex(e => e.id === bitacoraId);
+        if (entryIndex === -1) {
+            console.log('⚠️ Entrada no encontrada en allEntries:', bitacoraId);
+            return;
+        }
+        
+        // Obtener nuevo conteo de comentarios
+        const newCount = await countComments(bitacoraId);
+        
+        // Actualizar en allEntries
+        allEntries[entryIndex].commentCount = newCount;
+        allEntries[entryIndex].isCommentsRead = false;
+        
+        // Actualizar el DOM
+        const entryElements = document.querySelectorAll(`[data-entry-id="${bitacoraId}"]`);
+        entryElements.forEach(element => {
+            // Buscar el contador de comentarios en el elemento
+            const countSpan = element.querySelector('.comment-count');
+            if (countSpan) {
+                countSpan.textContent = newCount;
+                // Quitar clase de leído si existe
+                const commentsBtn = element.querySelector('.comments-btn, .mobile-action-btn.comments-btn');
+                if (commentsBtn) {
+                    commentsBtn.classList.remove('comments-read');
+                }
+            }
+        });
+        
+        console.log('🔄 Contador de comentarios actualizado:', { bitacoraId, newCount });
+    } catch (error) {
+        console.error('❌ Error actualizando contador de comentarios:', error);
+    }
+}
 
     // Limitar a 50 notificaciones
     if (notifications.length > 50) {

@@ -4743,8 +4743,8 @@ async function downloadPDF() {
             filtersInfo.push(`Hasta: ${new Date(fechaFinalFilter).toLocaleDateString('es-ES')}`);
         }
         const filtersText = filtersInfo.length > 0 ? filtersInfo.join(' | ') : 'Todos los registros';
-        
-        // Crear un contenedor temporal para el PDF
+
+        // Crear un contenedor temporal para el PDF con altura suficiente para evitar cortes
         let pdfContainer = document.createElement('div');
         pdfContainer.style.cssText = `
             position: fixed;
@@ -4754,12 +4754,13 @@ async function downloadPDF() {
             background: white;
             padding: 10mm;
             font-family: Arial, sans-serif;
-            font-size: 12px;
-            line-height: 1.2;
+            font-size: 11px;
+            line-height: 1.3;
             box-sizing: border-box;
+            page-break-inside: avoid;
             z-index: -9999;
         `;
-        
+
         document.body.appendChild(pdfContainer);
         
         // Crear HTML para el PDF (método original con todas las entradas)
@@ -4838,7 +4839,7 @@ async function downloadPDF() {
             const rowColor = entryIndex % 2 === 0 ? '#ffffff' : '#f8f9fa';
             const ubicacion = (entry.ubicacion || '').substring(0, 30) + ((entry.ubicacion || '').length > 30 ? '...' : '');
             pdfHTML += `
-                <tr style="font-size: 7px; height: 15px; background-color: ${rowColor};">
+                <tr style="font-size: 7px; height: 15px; background-color: ${rowColor}; page-break-inside: avoid;">
                     <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; font-weight: bold; color: #000000;">${entry.folio || '-'}</td>
                     <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${fechaFormateada}</td>
                     <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000; font-weight: bold;">${titulo}</td>
@@ -4914,22 +4915,23 @@ async function downloadPDF() {
         
         const imgData = canvas.toDataURL('image/png');
         console.log('🔍 Debug PDF - imgData generado, length:', imgData.length);
-        
+
         // Crear PDF con paginación automática
         const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');  // 'p' = portrait (vertical)
-        
+
         const imgWidth = 210;  // Ancho de página A4 en vertical
         const pageHeight = 297;  // Alto de página A4 en vertical
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
         let heightLeft = imgHeight;
         let position = 0;
-        
-        // Agregar la primera página
+
+        // Agregar primera página
         pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
         heightLeft -= pageHeight;
-        
+
         // Agregar páginas adicionales si es necesario
-        while (heightLeft >= 0) {
+        while (heightLeft > 0) {
             position = heightLeft - imgHeight;
             pdf.addPage();
             pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);

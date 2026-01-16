@@ -2484,6 +2484,14 @@ async function handleNewEntryNotification(payload) {
 
     addNotification(notification);
     console.log('🔔 Nueva entrada:', newEntry.titulo);
+    
+    // Recargar entradas para mostrar la nueva
+    try {
+        await loadBitacoraEntries(currentPage, false);
+        console.log('🔄 Entradas recargadas automáticamente');
+    } catch (error) {
+        console.error('❌ Error recargando entradas:', error);
+    }
 }
 
 // Manejar notificación de nuevo comentario
@@ -2508,6 +2516,16 @@ async function handleNewCommentNotification(payload) {
     };
 
     addNotification(notification);
+    
+    // Recargar comentarios si el modal está abierto
+    if (currentBitacoraId && newComment.bitacora_id === currentBitacoraId) {
+        try {
+            await loadComments(currentBitacoraId);
+            console.log('🔄 Comentarios recargados automáticamente');
+        } catch (error) {
+            console.error('❌ Error recargando comentarios:', error);
+        }
+    }
 }
 
 // Agregar notificación a la lista

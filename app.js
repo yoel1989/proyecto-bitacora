@@ -4878,64 +4878,186 @@ async function downloadPDF() {
         console.log('🔍 Debug PDF - Container scrollWidth actual:', pdfContainer.scrollWidth);
         console.log('🔍 Debug PDF - Container scrollHeight actual:', pdfContainer.scrollHeight);
         console.log('🔍 Debug PDF - Container innerHTML length:', pdfContainer.innerHTML.length);
-        
+
         console.log('🔍 Debug PDF - Después de esperar');
         console.log('🔍 Debug PDF - Container existe:', !!pdfContainer);
         console.log('🔍 Debug PDF - Container en DOM:', !!pdfContainer.parentNode);
-        
+
         if (!pdfContainer || !pdfContainer.parentNode) {
             console.error('❌ Error: Container no existe o no está en el DOM');
             showNotification('❌ Error: No se pudo generar el contenedor del PDF', 'error');
             return;
         }
-        
-        // Convertir a canvas con configuración optimizada para texto
-        console.log('🔍 Debug PDF - Iniciando html2canvas...');
-        const canvas = await html2canvas(pdfContainer, {
-            scale:2, // Reducir escala para evitar problemas
-            useCORS: true,
-            allowTaint: true,
-            logging: true, // Activar logging para ver qué pasa
-            width: pdfContainer.scrollWidth,
-            height: pdfContainer.scrollHeight,
-            windowWidth: pdfContainer.scrollWidth,
-            windowHeight: pdfContainer.scrollHeight,
-            backgroundColor: '#ffffff'
-        });
-        
-        console.log('🔍 Debug PDF - Canvas creado:', !!canvas);
-        console.log('🔍 Debug PDF - Canvas width:', canvas.width);
-        console.log('🔍 Debug PDF - Canvas height:', canvas.height);
-        
-        if (!canvas || canvas.width === 0 || canvas.height === 0) {
-            console.error('❌ Error: Canvas vacío o inválido');
-            showNotification('❌ Error: No se pudo generar el contenido del PDF', 'error');
-            return;
-        }
-        
-        const imgData = canvas.toDataURL('image/png');
-        console.log('🔍 Debug PDF - imgData generado, length:', imgData.length);
 
-        // Crear PDF con paginación automática
-        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');  // 'p' = portrait (vertical)
+        // Crear PDF
+        const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
 
-        const imgWidth = 210;  // Ancho de página A4 en vertical
+        const pageWidth = 210;  // Ancho de página A4 en vertical
         const pageHeight = 297;  // Alto de página A4 en vertical
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        const marginTop = 10;
+        const marginBottom = 10;
+        const usableHeight = pageHeight - marginTop - marginBottom;
 
-        let heightLeft = imgHeight;
-        let position = 0;
+        // Calcular cuántas filas caben en una página
+        const rowHeight = 15;  // Altura de cada fila en mm (aproximado)
+        const headerHeight = 20; // Altura del header + tabla
+        const rowsPerPage = Math.floor((usableHeight - headerHeight) / rowHeight);
 
-        // Agregar primera página
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        console.log('🔍 Debug PDF - Filas por página:', rowsPerPage);
 
-        // Agregar páginas adicionales si es necesario
-        while (heightLeft > 0) {
-            position = heightLeft - imgHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
+        // Dividir las entradas en páginas
+        const totalPages = Math.ceil(entriesWithComments.length / rowsPerPage);
+        console.log('🔍 Debug PDF - Total páginas:', totalPages);
+
+        // Generar una imagen por página para evitar cortes
+        for (let page = 0; page < totalPages; page++) {
+            const startIndex = page * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, entriesWithComments.length);
+            const pageEntries = entriesWithComments.slice(startIndex, endIndex);
+
+            console.log(`🔍 Debug PDF - Página ${page + 1}: entradas ${startIndex + 1} a ${endIndex}`);
+
+            // Crear HTML para esta página
+            let pageHTML = `
+                <div style="width: 210mm; background: white; padding: 10mm; font-family: Arial, sans-serif; font-size: 11px; line-height: 1.3; box-sizing: border-box;">
+                    <div style="margin-bottom: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 12px; width: 100%; box-sizing: border-box;">
+                        <div style="text-align: center; color: #ffffff; font-size: 18px; font-weight: bold; margin-bottom: 8px;">
+                            📋 BITÁCORA DE OBRA
+                        </div>
+                        <div style="text-align: center; color: #f8f9fa; font-size: 11px; margin-bottom: 4px;">
+                            👤 ${currentUser?.email || 'Usuario desconocido'} | 📊 ${entriesWithComments.length} entradas
+                        </div>
+                        <div style="text-align: center; color: #e8eaf6; font-size: 9px; margin-bottom: 4px;">
+                            🔍 ${filtersText}
+                        </div>
+                        <div style="text-align: center; color: #c5cae9; font-size: 8px;">
+                            🕐 ${new Date().toLocaleString('es-CO')}
+                        </div>
+                    </div>
+                    <div style="width: 100%; box-sizing: border-box;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 7px; table-layout: fixed;">
+                            <thead>
+                                <tr style="background-color: #1976d2; color: white; height: 18px;">
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Título</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 20%; font-weight: bold;">Descripción</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Inicio</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Final</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 6%; font-weight: bold;">Tipo</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Ubicación</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 12%; font-weight: bold;">Usuario</th>
+                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 20%; font-weight: bold;">Comentarios</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+
+            // Agregar filas de esta página
+            pageEntries.forEach((entry) => {
+                const fechaUsar = entry.fecha_hora || entry.fecha;
+                let fechaFormateada = '';
+
+                if (fechaUsar.includes('T')) {
+                    const [datePart, timePart] = fechaUsar.split('T');
+                    const [year, month, day] = datePart.split('-');
+                    const [hours, minutes] = timePart.split(':');
+                    fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
+                } else {
+                    const [year, month, day] = fechaUsar.split('-');
+                    fechaFormateada = `${day}/${month}/${year}`;
+                }
+
+                const titulo = (entry.titulo || '').substring(0, 60) + ((entry.titulo || '').length > 60 ? '...' : '');
+                const descripcion = (entry.descripcion || '').substring(0, 120) + ((entry.descripcion || '').length > 120 ? '...' : '');
+                const userEmail = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
+
+                let comentariosTexto = '';
+                if (entry.comments && entry.comments.length > 0) {
+                    comentariosTexto = entry.comments.map((comment, index) => {
+                        const commentDate = new Date(comment.created_at).toLocaleString('es-CO', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                        const author = comment.profiles?.email || `Usuario ${comment.user_id}`;
+                        return `${index + 1}. [${commentDate}] ${author}: ${comment.comentario}`;
+                    }).join(' | ');
+                } else {
+                    comentariosTexto = 'Sin comentarios';
+                }
+
+                const ubicacion = (entry.ubicacion || '').substring(0, 30) + ((entry.ubicacion || '').length > 30 ? '...' : '');
+
+                pageHTML += `
+                    <tr style="font-size: 7px; height: 15px;">
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; font-weight: bold; color: #000000;">${entry.folio || '-'}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${fechaFormateada}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000; font-weight: bold;">${titulo}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${descripcion}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; color: #000000;">${entry.hora_inicio || '-'}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; color: #000000;">${entry.hora_final || '-'}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${entry.tipo_nota || '-'}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${ubicacion}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000;">${userEmail}</td>
+                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; font-size: 6px;">${comentariosTexto}</td>
+                    </tr>
+                `;
+            });
+
+            pageHTML += `
+                            </tbody>
+                        </table>
+                    </div>
+                    <div style="margin-top: 15px; text-align: center; color: #000000; font-size: 9px;">
+                        <hr style="border: 1px solid #90caf9; margin: 5px 0;">
+                        Bitácora de Obra - Sistema de Registro Digital - Página ${page + 1} de ${totalPages}
+                    </div>
+                </div>
+            `;
+
+            // Crear contenedor temporal para esta página
+            const pageContainer = document.createElement('div');
+            pageContainer.style.cssText = `
+                position: fixed;
+                top: -9999px;
+                left: -9999px;
+                width: 210mm;
+                background: white;
+                z-index: -9999;
+            `;
+            pageContainer.innerHTML = pageHTML;
+            document.body.appendChild(pageContainer);
+
+            // Esperar renderizado
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Generar canvas de esta página
+            const canvas = await html2canvas(pageContainer, {
+                scale: 2,
+                useCORS: true,
+                allowTaint: true,
+                width: pageContainer.scrollWidth,
+                height: pageContainer.scrollHeight,
+                windowWidth: pageContainer.scrollWidth,
+                windowHeight: pageContainer.scrollHeight,
+                backgroundColor: '#ffffff'
+            });
+
+            // Agregar imagen al PDF
+            const imgData = canvas.toDataURL('image/png');
+            const imgHeight = (canvas.height * pageWidth) / canvas.width;
+
+            if (page > 0) {
+                pdf.addPage();
+            }
+
+            pdf.addImage(imgData, 'PNG', 0, marginTop, pageWidth, imgHeight);
+
+            // Limpiar contenedor
+            document.body.removeChild(pageContainer);
         }
         
         // Limpiar el contenedor

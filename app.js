@@ -254,6 +254,27 @@ let isLoadingEntries = false;
 let totalEntries = 0;
 let isOnline = true;
 let offlineMode = false;
+
+// Mock indexedDB object for offline functionality
+let indexedDB = {
+    saveEntry: async (entry) => {
+        console.log('📦 Mock saveEntry:', entry);
+    },
+    getAllEntries: async () => {
+        console.log('📦 Mock getAllEntries');
+        return [];
+    },
+    getQueueItems: async () => {
+        console.log('📦 Mock getQueueItems');
+        return [];
+    },
+    markQueueItemAsSynced: async (id) => {
+        console.log('📦 Mock markQueueItemAsSynced:', id);
+    },
+    addToQueue: async (action, entry) => {
+        console.log('📦 Mock addToQueue:', action, entry);
+    }
+};
 let commentFiles = []; // Archivos para el comentario principal
 let replyFiles = {}; // Archivos para respuestas (key: commentId)
 

@@ -286,7 +286,7 @@
                 <button class="close-register-modal" onclick="closeRegisterModal()">✕</button>
             </div>
             <div class="register-modal-body">
-                <form id="registerWithCodeForm">
+                <form id="registerWithCodeForm" onsubmit="return false">
                     <div class="form-group">
                         <label>Código de invitación: *</label>
                         <input type="text" id="registerInvitationCode" required placeholder="Ejemplo: ABC12345" maxlength="8" style="text-transform: uppercase;">

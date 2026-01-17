@@ -5750,7 +5750,12 @@ function copyGeneratedCode() {
     });
 }
 
-document.getElementById('registerWithCodeForm')?.addEventListener('submit', async function(e) {
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📝 Agregando event listener al formulario registerWithCodeForm');
+    const registerWithCodeForm = document.getElementById('registerWithCodeForm');
+    console.log('📝 Elemento registerWithCodeForm encontrado:', !!registerWithCodeForm);
+    if (registerWithCodeForm) {
+        registerWithCodeForm.addEventListener('submit', async function(e) {
     e.preventDefault();
     
     const code = document.getElementById('registerInvitationCode').value.trim().toUpperCase();
@@ -5820,6 +5825,8 @@ document.getElementById('registerWithCodeForm')?.addEventListener('submit', asyn
     } catch (error) {
         console.error('Error registrando:', error);
         showNotification('❌ Error al registrar: ' + error.message, 'error');
+    }
+        });
     }
 });
 

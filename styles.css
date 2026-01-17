@@ -39,6 +39,27 @@ body {
   display: none;
 }
 
+/* Indicador de modo offline */
+body.offline-mode::before {
+    content: '🔴 MODO OFFLINE';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #721c24;
+    color: white;
+    text-align: center;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    z-index: 999999;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+body.offline-mode {
+    padding-top: 30px;
+}
+
 /* Login Screen */
 #loginScreen {
   position: fixed !important;

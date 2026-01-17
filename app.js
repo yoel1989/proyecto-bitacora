@@ -1,6 +1,185 @@
 // Supabase client está configurado en config.js
 // Asegúrate de que config.js se cargue antes que app.js
 
+if (typeof indexedDB !== 'undefined') {
+    // IndexedDB está disponible
+} else {
+    console.error('❌ IndexedDB no está disponible');
+}
+
+// Detectar cambios de conexión
+window.addEventListener('online', () => {
+    console.log('🟢 Conexión restaurada');
+    isOnline = true;
+    offlineMode = false;
+    document.body.classList.remove('offline-mode');
+    showNotification('🟢 Conexión restaurada', 'success', 2000);
+    syncOfflineQueue();
+    // Recargar entradas desde Supabase
+    loadBitacoraEntries(1, false);
+});
+
+window.addEventListener('offline', () => {
+    console.log('🔴 Sin conexión - Modo offline activado');
+    isOnline = false;
+    offlineMode = true;
+    document.body.classList.add('offline-mode');
+    showNotification('🔴 Sin conexión - Trabajando offline', 'warning', 5000);
+    // Cargar entradas desde IndexedDB
+    loadOfflineEntries();
+});
+
+// Función para sincronizar cuando vuelve la conexión
+async function syncOfflineQueue() {
+    try {
+        if (!indexedDB || !isOnline) return;
+
+        console.log('🔄 Iniciando sincronización...');
+
+        const queueItems = await indexedDB.getQueueItems();
+
+        if (queueItems.length === 0) {
+            console.log('✅ Queue vacío, nada que sincronizar');
+            return;
+        }
+
+        console.log(`🔄 Procesando ${queueItems.length} items del queue...`);
+
+        for (const item of queueItems) {
+            try {
+                console.log(`🔄 Procesando item: ${item.action}`);
+
+                if (item.action === 'create_entry') {
+                    await createEntryOnline(item.data);
+                } else if (item.action === 'update_entry') {
+                    await updateEntryOnline(item.data);
+                } else if (item.action === 'delete_entry') {
+                    await deleteEntryOnline(item.data.id);
+                }
+
+                await indexedDB.markQueueItemAsSynced(item.id);
+                console.log(`✅ Item sincronizado: ${item.id}`);
+            } catch (error) {
+                console.error(`❌ Error sincronizando item ${item.id}:`, error);
+            }
+        }
+
+        showNotification(`✅ ${queueItems.length} cambios sincronizados`, 'success', 3000);
+    } catch (error) {
+        console.error('❌ Error en sincronización:', error);
+    }
+}
+
+// Crear entrada online (usar Supabase)
+async function createEntryOnline(entryData) {
+    const { data, error } = await supabaseClient
+        .from('bitacora')
+        .insert([{
+            titulo: entryData.titulo,
+            descripcion: entryData.descripcion,
+            fecha: entryData.fecha,
+            hora_inicio: entryData.hora_inicio,
+            hora_final: entryData.hora_final,
+            tipo_nota: entryData.tipo_nota,
+            ubicacion: entryData.ubicacion,
+            user_id: currentUser?.id,
+            folio: entryData.folio
+        }])
+        .select()
+        .single();
+
+    if (error) throw error;
+
+    return data;
+}
+
+// Actualizar entrada online
+async function updateEntryOnline(entryData) {
+    const { error } = await supabaseClient
+        .from('bitacora')
+        .update({
+            titulo: entryData.titulo,
+            descripcion: entryData.descripcion,
+            fecha: entryData.fecha,
+            hora_inicio: entryData.hora_inicio,
+            hora_final: entryData.hora_final,
+            tipo_nota: entryData.tipo_nota,
+            ubicacion: entryData.ubicacion
+        })
+        .eq('id', entryData.id)
+        .select();
+
+    if (error) throw error;
+}
+
+// Eliminar entrada online
+async function deleteEntryOnline(id) {
+    const { error } = await supabaseClient
+        .from('bitacora')
+        .delete()
+        .eq('id', id);
+
+    if (error) throw error;
+}
+
+// Cargar entradas desde IndexedDB cuando está offline
+async function loadOfflineEntries() {
+    console.log('🔧 loadOfflineEntries() - FUNCIÓN LLAMADA');
+    console.log('🔧 indexedDB existe:', !!indexedDB);
+    console.log('🔧 isOnline:', isOnline);
+    console.log('🔧 offlineMode:', offlineMode);
+
+    try {
+        if (!indexedDB) {
+            console.error('❌ indexedDB no está disponible');
+            showNotification('❌ Error: Base de datos offline no disponible', 'error', 3000);
+            return;
+        }
+
+        console.log('🔧 Llamando a indexedDB.getAllEntries()...');
+
+        const offlineEntries = await indexedDB.getAllEntries();
+
+        console.log('🔧 Resultado getAllEntries:', offlineEntries?.length || 0, 'entradas');
+
+        if (offlineEntries.length === 0) {
+            console.log('ℹ️ No hay entradas offline');
+            showNotification('ℹ️ No hay datos offline disponibles', 'info', 2000);
+            return;
+        }
+
+        console.log(`📦 Cargadas ${offlineEntries.length} entradas desde IndexedDB`);
+
+        // Usar las mismas funciones de procesamiento
+        allEntries = offlineEntries.map(entry => {
+            const email = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
+            return {
+                ...entry,
+                profiles: {
+                    email: email
+                }
+            };
+        });
+
+        totalEntries = offlineEntries.length;
+        currentPage = 1;
+
+        console.log('🔧 allEntries actualizado:', allEntries.length);
+        console.log('🔧 Llamando a filterAndDisplayEntries()...');
+
+        // Actualizar UI
+        await filterAndDisplayEntries();
+        updatePaginationInfo();
+
+        console.log('🔧 UI actualizada con entradas offline');
+
+        showNotification(`📦 ${offlineEntries.length} entradas cargadas offline`, 'info', 2000);
+    } catch (error) {
+        console.error('❌ Error cargando entradas offline:', error);
+        showNotification('❌ Error cargando datos offline: ' + error.message, 'error', 3000);
+    }
+}
+
 // Cloudflare R2 Worker URL para almacenamiento de archivos
 const R2_WORKER_URL = 'https://bitacora-upload-worker.bitacoradeobra.workers.dev';
 
@@ -73,6 +252,8 @@ let currentPage = 1;
 const ENTRIES_PER_PAGE = 50;
 let isLoadingEntries = false;
 let totalEntries = 0;
+let isOnline = true;
+let offlineMode = false;
 let commentFiles = []; // Archivos para el comentario principal
 let replyFiles = {}; // Archivos para respuestas (key: commentId)
 
@@ -713,50 +894,86 @@ const fechaInput = document.getElementById('fecha').value;
 data = updateData;
         error = updateError;
     } else {
-        // Crear nueva entrada
-        const { data: insertData, error: insertError } = await supabaseClient
-            .from('bitacora')
-            .insert(formData)
-            .select();
-        
-        data = insertData;
-        error = insertError;
-    }
-    
-    if (error) {
-        console.error('Error guardando:', error);
-        alert('Error al guardar: ' + error.message);
-} else {
-        
-        
-        // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas)
-        if (!editId && data && data[0]) {
-            try {
-                await enviarNotificacionesEmailATodos(data[0]);
-                console.log('📧 Notificaciones por email enviadas');
-            } catch (emailError) {
-                console.error('❌ Error enviando emails:', emailError);
-                // No fallar el guardado si hay error en emails
-            }
-        }
-        
-        // Notificar a otros usuarios (el realtime se encargará automáticamente)
-        showNotification('✅ Entrada guardada exitosamente', 'success');
-        
-        document.getElementById('bitacoraForm').reset();
-        await loadBitacoraEntries(1, false); // Recargar desde la primera página
-        hideForm();
-        
-        if (editId) {
-            if (fotoFiles.length > 0 && keepPhotosCheckbox && !keepPhotosCheckbox.checked) {
-                alert('⚠️ Entrada actualizada: Las fotos existentes fueron reemplazadas por las nuevas fotos.');
-            } else if (fotoFiles.length > 0 && keepPhotosCheckbox && keepPhotosCheckbox.checked) {
-                alert(`✅ Entrada actualizada: Se mantuvieron ${JSON.parse(form.dataset.existingPhotos || '[]').length} fotos existentes y se agregaron ${fotoFiles.length} nuevas.`);
-            } else {
-                alert('✅ Entrada actualizada exitosamente');
+        let data, error;
+
+        if (isOnline) {
+            // Crear nueva entrada en Supabase (online)
+            const result = await supabaseClient
+                .from('bitacora')
+                .insert(formData)
+                .select()
+                .single();
+
+            data = result.data;
+            error = result.error;
+
+            if (!error && data) {
+                // Guardar en IndexedDB para soporte offline
+                await indexedDB.saveEntry({
+                    ...formData,
+                    id: data.id,
+                    folio: data.folio,
+                    fecha_hora: data.fecha_hora,
+                    created_at: data.created_at
+                });
+                console.log('✅ Entrada guardada en IndexedDB');
             }
         } else {
-            alert('✅ Entrada guardada exitosamente');
+            // Guardar solo en IndexedDB (offline)
+            console.log('🔴 Modo offline - Guardando entrada en IndexedDB');
+
+            const tempId = Date.now();
+            const offlineEntry = {
+                ...formData,
+                id: tempId,
+                folio: formData.folio,
+                fecha_hora: formData.fecha,
+                created_at: new Date().toISOString(),
+                isOffline: true
+            };
+
+            await indexedDB.saveEntry(offlineEntry);
+            await indexedDB.addToQueue('create_entry', offlineEntry);
+            console.log('✅ Entrada guardada en IndexedDB (offline)');
+
+            data = [offlineEntry];
+            error = null;
+        }
+
+        if (error) {
+            console.error('Error guardando:', error);
+            alert('Error al guardar: ' + error.message);
+        } else {
+            // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas online)
+            if (!editId && data && data[0] && isOnline) {
+                try {
+                    await enviarNotificacionesEmailATodos(data[0]);
+                    console.log('📧 Notificaciones por email enviadas');
+                } catch (emailError) {
+                    console.error('❌ Error enviando emails:', emailError);
+                    // No fallar el guardado si hay error en emails
+                }
+            }
+
+            // Notificar a otros usuarios (el realtime se encargará automáticamente)
+            const successMsg = isOnline ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)';
+            showNotification(successMsg, 'success');
+
+            document.getElementById('bitacoraForm').reset();
+            await loadBitacoraEntries(1, false); // Recargar desde la primera página
+            hideForm();
+
+            if (editId) {
+                if (fotoFiles.length > 0 && keepPhotosCheckbox && !keepPhotosCheckbox.checked) {
+                    alert('⚠️ Entrada actualizada: Las fotos existentes fueron reemplazadas por las nuevas fotos.');
+                } else if (fotoFiles.length > 0 && keepPhotosCheckbox && keepPhotosCheckbox.checked) {
+                    alert(`✅ Entrada actualizada: Se mantuvieron ${JSON.parse(form.dataset.existingPhotos || '[]').length} fotos existentes y se agregaron ${fotoFiles.length} nuevas.`);
+                } else {
+                    alert(isOnline ? '✅ Entrada actualizada exitosamente' : '📦 Entrada actualizada offline (se sincronizará cuando vuelva la conexión)');
+                }
+            } else {
+                alert(isOnline ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)');
+            }
         }
     }
 }
@@ -764,79 +981,84 @@ data = updateData;
 // Cargar entradas con paginación y optimización
 async function loadBitacoraEntries(page = 1, append = false) {
     if (isLoadingEntries) return;
-    
+
     isLoadingEntries = true;
     showLoadingIndicator();
-    
+
     try {
-        const offset = (page - 1) * ENTRIES_PER_PAGE;
-        
-        // Consulta optimizada con timeout
-        const result = await Promise.race([
-            supabaseClient
-                .from('bitacora')
-                .select('*', { count: 'exact' })
-                .order('fecha', { ascending: false })
-                .range(offset, offset + ENTRIES_PER_PAGE - 1),
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), 5000)
-            )
-        ]);
-        
-        const { data: bitacoraData, error, count } = result;
-        
-        if (error) {
-            console.error('Error al cargar entradas:', error);
-            showNotification('❌ Error al cargar las entradas', 'error');
-            return;
-        }
-        
-        // Procesar entradas inmediatamente sin esperar perfiles
-        const processedEntries = bitacoraData.map(entry => {
-            // Determinar el email a mostrar
-            let email = entry.user_id || 'Usuario desconocido';
-            
-            // Si la entrada es del usuario actual, usar su email directamente
-            if (currentUser && entry.user_id === currentUser.id && currentUser.email) {
-                email = currentUser.email;
+        if (isOnline) {
+            const offset = (page - 1) * ENTRIES_PER_PAGE;
+
+            // Consulta optimizada con timeout
+            const result = await Promise.race([
+                supabaseClient
+                    .from('bitacora')
+                    .select('*', { count: 'exact' })
+                    .order('fecha', { ascending: false })
+                    .range(offset, offset + ENTRIES_PER_PAGE - 1),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout')), 5000)
+                )
+            ]);
+
+            const { data: bitacoraData, error, count } = result;
+
+            if (error) {
+                console.error('Error al cargar entradas:', error);
+                showNotification('❌ Error al cargar las entradas', 'error');
+                return;
             }
-            
-            return {
-                ...entry,
-                profiles: {
-                    email: email
+
+            // Procesar entradas inmediatamente sin esperar perfiles
+            const processedEntries = bitacoraData.map(entry => {
+                // Determinar el email a mostrar
+                let email = entry.user_id || 'Usuario desconocido';
+
+                // Si la entrada es del usuario actual, usar su email directamente
+                if (currentUser && entry.user_id === currentUser.id && currentUser.email) {
+                    email = currentUser.email;
                 }
-            };
-        });
-        
-        // Actualizar datos globales
-        if (append && page > 1) {
-            allEntries = [...allEntries, ...processedEntries];
-        } else {
-            allEntries = processedEntries;
-            currentPage = page;
-        }
-        
-        totalEntries = count || 0;
-        
-        updatePaginationInfo();
-        
-        // Actualizar UI primero con los datos disponibles
-        filterAndDisplayEntries();
-        
-        // Luego cargar emails de usuarios en segundo plano y actualizar solo los elementos existentes
-        if (bitacoraData.length > 0) {
-            loadUserEmailsInBackground(processedEntries).catch(err => {
-                console.warn('Error cargando emails en segundo plano:', err);
+
+                return {
+                    ...entry,
+                    profiles: {
+                        email: email
+                    }
+                };
             });
+
+            // Actualizar datos globales
+            if (append && page > 1) {
+                allEntries = [...allEntries, ...processedEntries];
+            } else {
+                allEntries = processedEntries;
+                currentPage = page;
+            }
+
+            totalEntries = count || 0;
+
+            updatePaginationInfo();
+
+            // Actualizar UI primero con los datos disponibles
+            filterAndDisplayEntries();
+
+            // Luego cargar emails de usuarios en segundo plano y actualizar solo los elementos existentes
+            if (bitacoraData.length > 0) {
+                loadUserEmailsInBackground(processedEntries).catch(err => {
+                    console.warn('Error cargando emails en segundo plano:', err);
+                });
+            }
+
+            // Ocultar botón de cargar más si no hay más entradas
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (loadMoreBtn) {
+                loadMoreBtn.style.display = allEntries.length >= totalEntries ? 'none' : 'block';
+            }
+        } else {
+            // Offline: No hacer nada, ya se cargó desde IndexedDB
+            console.log('🔴 Modo offline - Las entradas ya fueron cargadas desde IndexedDB');
         }
-        
-        // Ocultar botón de cargar más si no hay más entradas
-        const loadMoreBtn = document.getElementById('loadMoreBtn');
-        if (loadMoreBtn) {
-            loadMoreBtn.style.display = allEntries.length >= totalEntries ? 'none' : 'block';
-        }
-        
+
     } catch (error) {
         console.error('Error inesperado al cargar entradas:', error);
         showNotification('❌ Error al cargar las entradas', 'error');
@@ -5393,40 +5615,109 @@ async function loadInvitationCodes() {
     }
 }
 
-document.getElementById('generateCodeForm')?.addEventListener('submit', async function(e) {
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎫 Agregando event listener al formulario generateCodeForm');
+    const generateCodeForm = document.getElementById('generateCodeForm');
+    console.log('🎫 Elemento generateCodeForm encontrado:', !!generateCodeForm);
+    if (generateCodeForm) {
+        generateCodeForm.addEventListener('submit', async function(e) {
+    console.log('🎫 Formulario de generación de código enviado');
+
     e.preventDefault();
-    
-    const role = document.getElementById('codeRole').value;
-    const expiration = parseInt(document.getElementById('codeExpiration').value) || 48;
-    
+
+    const generateCodeBtn = document.getElementById('generateCodeBtn');
+    const codeRoleInput = document.getElementById('codeRole');
+    const codeExpirationInput = document.getElementById('codeExpiration');
+    const generatedCodeEl = document.getElementById('generatedCode');
+    const generatedCodeResultEl = document.getElementById('generatedCodeResult');
+
+    console.log('🎫 Elementos encontrados:', {
+        generateCodeBtn: !!generateCodeBtn,
+        codeRoleInput: !!codeRoleInput,
+        codeExpirationInput: !!codeExpirationInput,
+        generatedCodeEl: !!generatedCodeEl,
+        generatedCodeResultEl: !!generatedCodeResultEl
+    });
+
+    if (!codeRoleInput) {
+        console.error('❌ Input de rol no encontrado');
+        return;
+    }
+
+    const role = codeRoleInput.value;
+    const expiration = parseInt(codeExpirationInput.value) || 48;
+
+    console.log('🔧 Valores:', {
+        role: role,
+        expiration: expiration,
+        isOnline: isOnline,
+        offlineMode: offlineMode
+    });
+
     if (!role) {
+        console.error('❌ Rol está vacío');
         showNotification('❌ Por favor selecciona un rol', 'error');
         return;
     }
-    
+
     try {
+        if (!isOnline) {
+            console.error('❌ Sin conexión - No se puede generar código');
+            showNotification('🔴 Sin conexión - Se requiere internet para generar códigos', 'error', 5000);
+            return;
+        }
+
         showNotification('✨ Generando código...', 'info');
-        
+
+        console.log('🔧 Llamando RPC: generate_invitation_code');
+
         const { data: code, error: codeError } = await supabaseClient
             .rpc('generate_invitation_code', {
                 p_role: role,
                 p_expires_hours: expiration
             });
-        
-        if (codeError) throw codeError;
-        
-        document.getElementById('generatedCode').textContent = code;
-        document.getElementById('generatedCodeResult').style.display = 'block';
-        
+
+        console.log('🔧 Respuesta del RPC:', { code, error: codeError });
+
+        if (codeError) {
+            console.error('❌ Error en RPC:', codeError);
+            throw codeError;
+        }
+
+        if (!code) {
+            console.error('❌ El código es nulo:', code);
+            throw new Error('El código generado es nulo');
+        }
+
+        console.log('🔧 Código generado:', code);
+
+        if (generatedCodeEl) {
+            generatedCodeEl.textContent = code;
+            console.log('✅ Código asignado al elemento');
+        } else {
+            console.error('❌ Elemento generatedCode no encontrado');
+        }
+
+        if (generatedCodeResultEl) {
+            generatedCodeResultEl.style.display = 'block';
+            console.log('✅ Resultado mostrado');
+        } else {
+            console.error('❌ Elemento generatedCodeResult no encontrado');
+        }
+
         showNotification('✅ Código generado exitosamente: ' + code, 'success');
-        
+
         document.getElementById('codeRole').value = '';
-        
+
+        console.log('🔧 Recargando códigos en 500ms...');
         setTimeout(loadInvitationCodes, 500);
-        
+
     } catch (error) {
-        console.error('Error generando código:', error);
+        console.error('❌ Error generando código:', error);
+        console.error('❌ Detalles:', error.message, error.code, error.hint);
         showNotification('❌ Error al generar código: ' + error.message, 'error');
+    }
+        });
     }
 });
 
@@ -5490,7 +5781,9 @@ document.getElementById('registerWithCodeForm')?.addEventListener('submit', asyn
             email: email,
             password: password
         });
-        
+
+        console.log('🔐 Respuesta de signUp:', { authData, authError });
+
         if (authError) throw authError;
         
         if (authData.user) {

@@ -238,7 +238,7 @@
             <div class="invitation-modal-body">
                 <div class="create-code-section">
                     <h4>✨ Generar Nuevo Código</h4>
-                    <form id="generateCodeForm">
+                    <form id="generateCodeForm" onsubmit="return false">
                         <div class="form-group">
                             <label>Rol del usuario: *</label>
                             <select id="codeRole" required>
@@ -255,7 +255,7 @@
                             <input type="number" id="codeExpiration" value="48" min="1" max="168">
                             <small>El código expira después de este tiempo</small>
                         </div>
-                        <button type="submit" class="generate-code-btn">🎫 Generar Código</button>
+                        <button type="submit" id="generateCodeBtn" class="generate-code-btn">🎫 Generar Código</button>
                     </form>
                     <div id="generatedCodeResult" class="generated-code-result" style="display: none;">
                         <div class="generated-code-box">
@@ -351,7 +351,5 @@
             </div>
         </div>
     </div>
- 
-    <script src="app.js"></script>
 </body>
 </html>

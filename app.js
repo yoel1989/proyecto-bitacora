@@ -1,7 +1,7 @@
 // Supabase client está configurado en config.js
 // Asegúrate de que config.js se cargue antes que app.js
 
-if (typeof indexedDB !== 'undefined') {
+if (typeof window !== 'undefined' && window.indexedDB) {
     // IndexedDB está disponible
 } else {
     console.error('❌ IndexedDB no está disponible');
@@ -32,11 +32,11 @@ window.addEventListener('offline', () => {
 // Función para sincronizar cuando vuelve la conexión
 async function syncOfflineQueue() {
     try {
-        if (!indexedDB || !isOnline) return;
+        if (!dbManager || !isOnline) return;
 
         console.log('🔄 Iniciando sincronización...');
 
-        const queueItems = await indexedDB.getQueueItems();
+        const queueItems = await dbManager.getQueueItems();
 
         if (queueItems.length === 0) {
             console.log('✅ Queue vacío, nada que sincronizar');
@@ -57,7 +57,7 @@ async function syncOfflineQueue() {
                     await deleteEntryOnline(item.data.id);
                 }
 
-                await indexedDB.markQueueItemAsSynced(item.id);
+                await dbManager.markQueueItemAsSynced(item.id);
                 console.log(`✅ Item sincronizado: ${item.id}`);
             } catch (error) {
                 console.error(`❌ Error sincronizando item ${item.id}:`, error);
@@ -125,20 +125,20 @@ async function deleteEntryOnline(id) {
 // Cargar entradas desde IndexedDB cuando está offline
 async function loadOfflineEntries() {
     console.log('🔧 loadOfflineEntries() - FUNCIÓN LLAMADA');
-    console.log('🔧 indexedDB existe:', !!indexedDB);
+    console.log('🔧 dbManager existe:', !!dbManager);
     console.log('🔧 isOnline:', isOnline);
     console.log('🔧 offlineMode:', offlineMode);
 
     try {
-        if (!indexedDB) {
-            console.error('❌ indexedDB no está disponible');
+        if (!dbManager) {
+            console.error('❌ dbManager no está disponible');
             showNotification('❌ Error: Base de datos offline no disponible', 'error', 3000);
             return;
         }
 
-        console.log('🔧 Llamando a indexedDB.getAllEntries()...');
+        console.log('🔧 Llamando a dbManager.getAllEntries()...');
 
-        const offlineEntries = await indexedDB.getAllEntries();
+        const offlineEntries = await dbManager.getAllEntries();
 
         console.log('🔧 Resultado getAllEntries:', offlineEntries?.length || 0, 'entradas');
 
@@ -255,8 +255,8 @@ let totalEntries = 0;
 let isOnline = true;
 let offlineMode = false;
 
-// Mock indexedDB object for offline functionality
-let indexedDB = {
+// Mock dbManager object for offline functionality
+let dbManager = {
     saveEntry: async (entry) => {
         console.log('📦 Mock saveEntry:', entry);
     },
@@ -930,7 +930,7 @@ data = updateData;
 
             if (!error && data) {
                 // Guardar en IndexedDB para soporte offline
-                await indexedDB.saveEntry({
+                await dbManager.saveEntry({
                     ...formData,
                     id: data.id,
                     folio: data.folio,
@@ -953,8 +953,8 @@ data = updateData;
                 isOffline: true
             };
 
-            await indexedDB.saveEntry(offlineEntry);
-            await indexedDB.addToQueue('create_entry', offlineEntry);
+            await dbManager.saveEntry(offlineEntry);
+            await dbManager.addToQueue('create_entry', offlineEntry);
             console.log('✅ Entrada guardada en IndexedDB (offline)');
 
             data = [offlineEntry];

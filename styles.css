@@ -634,10 +634,10 @@ main {
 
 .filter-actions {
   display: flex;
-  gap: 8px;
-  align-items: flex-end;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
   margin-left: 1rem;
+  min-width: 130px;
 }
 
 .filter-group input,
@@ -689,7 +689,6 @@ main {
   font-size: 12px;
   white-space: nowrap;
   transition: all 0.3s ease;
-  margin-right: 8px;
 }
 
 .download-pdf-btn:hover {

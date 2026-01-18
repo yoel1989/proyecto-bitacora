@@ -1606,10 +1606,17 @@ async function handleBitacoraSubmit(e) {
         }
     }
 
+        console.log('📧 ========== ANTES DE VERIFICAR ERROR ==========');
+        console.log('📧 error existe:', !!error);
+        if (error) {
+            console.log('📧 error.message:', error.message);
+        }
+
         if (error) {
             console.error('Error guardando:', error);
             alert('Error al guardar: ' + error.message);
         } else {
+            console.log('📧 ========== NO HAY ERROR, ENTRANDO A SECCIÓN DE EMAILS ==========');
             console.log('📧 ========== LLEGANDO A LA SECCIÓN DE EMAILS ==========');
 
             // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas online)

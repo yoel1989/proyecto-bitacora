@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': 'http://127.0.0.1:3000',
+        'Access-Control-Allow-Origin': 'https://bitacoradigital1509.com',
         'Access-Control-Allow-Methods': 'POST',
         'Access-Control-Allow-Headers': '*',
         'Access-Control-Max-Age': '86400',

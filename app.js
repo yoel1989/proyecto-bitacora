@@ -938,6 +938,8 @@ let unreadNotificationCount = 0; // Contador de no leídas
 async function enviarNotificacionesEmailATodos(entrada) {
     try {
         console.log('📧 Enviando notificación al backend...');
+        console.log('📧 URL del backend:', 'https://proyecto-bitacora.onrender.com/api/send-entry-notification');
+        console.log('📧 Datos a enviar:', entrada);
 
         // Llamar al backend para enviar notificaciones
         const response = await fetch('https://proyecto-bitacora.onrender.com/api/send-entry-notification', {
@@ -950,15 +952,24 @@ async function enviarNotificacionesEmailATodos(entrada) {
             })
         });
 
+        console.log('📧 Respuesta del backend - Status:', response.status);
+        console.log('📧 Respuesta del backend - OK:', response.ok);
+
         if (!response.ok) {
-            throw new Error(`Error del servidor: ${response.status}`);
+            const errorText = await response.text();
+            console.error('❌ Error del servidor - Respuesta:', errorText);
+            throw new Error(`Error del servidor: ${response.status} - ${errorText}`);
         }
 
         const resultado = await response.json();
         console.log('✅ Notificaciones enviadas exitosamente:', resultado);
 
+        // Mostrar confirmación de envío
+        showNotification(`✅ Notificaciones enviadas a ${resultado.exitos || 0} usuarios`, 'success', 3000);
+
     } catch (error) {
         console.error('❌ Error enviando notificaciones:', error);
+        console.error('❌ Detalles del error:', error.message);
         // Fallback: mostrar notificación local si falla el envío
         showNotification('⚠️ No se pudieron enviar notificaciones por email, pero la entrada se guardó correctamente', 'warning', 5000);
     }

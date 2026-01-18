@@ -1,16 +1,20 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { Resend } = require('resend');
 
 // Inicializar Resend (deberás obtener tu API key)
 const resend = new Resend('re_bKJkXN7K_MqTjYz8Gt1eiJjW7HBm2GY4n');
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
+
+// Servir archivos estáticos desde el directorio raíz
+app.use(express.static(path.join(__dirname)));
 
 // Endpoint para enviar notificaciones de nuevas entradas
 app.post('/api/send-entry-notification', async (req, res) => {
@@ -159,6 +163,11 @@ app.post('/api/send-invitation', async (req, res) => {
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'ok', message: 'Email service is running' });
+});
+
+// Catch-all handler: send back index.html for any non-API routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Iniciar servidor

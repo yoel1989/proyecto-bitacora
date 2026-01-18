@@ -1,20 +1,12 @@
 // email-service.js
-const nodemailer = require('nodemailer');
-
 // Importar Resend para envío de emails
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 
-const resend = new Resend(process.env.RESEND_API_KEY || 'tu-api-key-de-resend');
+const resend = new Resend(process.env.RESEND_API_KEY || 're_bKJkXN7K_MqTjYz8Gt1eiJjW7HBm2GY4n');
 
-// Verificar conexión
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Error configurando email:', error);
-  } else {
-    console.log('✅ Servidor de email listo para enviar');
-  }
-});
+// Verificar conexión con Resend
+console.log('✅ Resend configurado para envío de emails');
 
 // Función para enviar notificación a todos los usuarios
 async function notificarATodosUsuarios(entrada) {
@@ -59,12 +51,21 @@ async function notificarATodosUsuarios(entrada) {
   }
 }
 
-// Función para enviar email individual
+// Función para enviar email individual (usando Resend)
 async function enviarEmailIndividual(usuario, entrada) {
-  const contenidoEmail = generarContenidoEmail(usuario, entrada);
-  
   try {
-    await transporter.sendMail(contenidoEmail);
+    const { data, error } = await resend.emails.send({
+      from: 'Bitácora de Obra <onboarding@resend.dev>',
+      to: [usuario.email],
+      subject: `🔔 Nueva entrada: ${entrada.titulo}`,
+      html: generarContenidoEmailMasivo([usuario], entrada)
+    });
+
+    if (error) {
+      console.error(`❌ Error enviando a ${usuario.email}:`, error);
+      throw error;
+    }
+
     console.log(`✅ Email enviado a: ${usuario.email}`);
   } catch (error) {
     console.error(`❌ Error enviando a ${usuario.email}:`, error);

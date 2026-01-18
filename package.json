@@ -4,8 +4,8 @@
   "description": "Bitácora de obra con múltiples usuarios y fotos",
   "main": "email-backend.js",
   "scripts": {
-    "start": "node email-backend.js",
-    "dev": "node email-backend.js",
+    "start": "concurrently \"node email-backend.js\" \"live-server --port=3000\"",
+    "dev": "concurrently \"node email-backend.js\" \"live-server --port=3000\"",
     "email-service": "node email-backend.js"
   },
   "dependencies": {

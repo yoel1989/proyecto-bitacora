@@ -36,14 +36,16 @@ if (typeof window !== 'undefined' && window.indexedDB) {
     console.error('❌ IndexedDB no está disponible');
 }
 
+// Variable para evitar notificaciones durante la carga inicial
+let initialLoadComplete = false;
+
 // Función para verificar y actualizar estado de conexión
-async function updateConnectionStatus() {
+async function updateConnectionStatus(showNotifications = true) {
     const wasOnline = isOnline;
     const navigatorOnline = navigator.onLine;
 
     // Usar verificación REAL de conectividad, no solo navigator.onLine
     console.log('📡 🔍 VERIFICANDO CONECTIVIDAD REAL...');
-    showNotification('🔍 Verificando conexión a internet...', 'info', 2000);
 
     const realOnline = await checkRealConnectivity().catch(() => false);
     isOnline = realOnline;
@@ -56,22 +58,75 @@ async function updateConnectionStatus() {
             console.log('🟢 Conexión real restaurada - activando modo online');
             offlineMode = false;
             document.body.classList.remove('offline-mode');
-            showNotification('🟢 Conexión restaurada', 'success', 2000);
+            if (showNotifications && initialLoadComplete) {
+                showNotification('🟢 Conexión restaurada', 'success', 2000);
+            }
+            // Actualizar rol del usuario cuando se recupera conexión
+            if (currentUser && supabaseClient) {
+                await refreshUserRole();
+            }
             syncOfflineQueue();
             loadBitacoraEntries(1, false);
         } else {
-            console.log('🔴 Sin conexión REAL detectada - recargando página en modo offline');
+            console.log('🔴 Sin conexión REAL detectada - activando modo offline');
             offlineMode = true;
             document.body.classList.add('offline-mode');
-            showNotification('🔴 Conexión perdida - Reiniciando en modo offline...', 'warning', 3000);
+            if (showNotifications && initialLoadComplete) {
+                showNotification('🔴 Conexión perdida - Trabajando offline', 'warning', 3000);
+            }
 
-            // Recargar la página para que se inicie correctamente en offline
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
+            console.log('🔴 Cargando entradas offline...');
+            await loadOfflineEntries();
         }
     } else {
         console.log('📡 Estado de conexión sin cambios');
+    }
+}
+
+// Función para refrescar el rol del usuario cuando vuelve la conexión
+async function refreshUserRole() {
+    if (!currentUser || !supabaseClient) return;
+
+    try {
+        console.log('🔄 Refrescando rol del usuario...');
+        const { data: profile } = await Promise.race([
+            supabaseClient
+                .from('profiles')
+                .select('rol, nombre')
+                .eq('id', currentUser.id)
+                .single(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout')), 3000)
+            )
+        ]);
+
+        if (profile) {
+            currentUser.role = profile.rol || 'user';
+            currentUser.nombre = profile.nombre;
+
+            // Actualizar localStorage
+            const savedSession = localStorage.getItem('bitacora_session');
+            if (savedSession) {
+                const sessionData = JSON.parse(savedSession);
+                sessionData.user.role = currentUser.role;
+                sessionData.user.nombre = currentUser.nombre;
+                localStorage.setItem('bitacora_session', JSON.stringify(sessionData));
+            }
+
+            // Actualizar UI
+            const displayName = currentUser.nombre || currentUser.email || 'Usuario';
+            document.getElementById('userName').textContent = displayName;
+            document.getElementById('userRole').textContent = '(' + getRoleDisplayName(currentUser.role) + ')';
+
+            const manageUsersBtn = document.getElementById('manageUsersBtn');
+            if (manageUsersBtn) {
+                manageUsersBtn.style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
+            }
+
+            console.log('✅ Rol actualizado:', currentUser.role);
+        }
+    } catch (error) {
+        console.warn('⚠️ Error refrescando rol:', error);
     }
 }
 
@@ -131,8 +186,8 @@ async function checkRealConnectivity() {
     }
 }
 
-// Check periódico de conectividad REAL (cada 1 segundo - ultra agresivo)
-console.log('🌐 Iniciando check periódico de conectividad (cada 1 segundo)');
+// Check periódico de conectividad REAL (cada 30 segundos - más razonable)
+console.log('🌐 Iniciando check periódico de conectividad (cada 30 segundos)');
 setInterval(async () => {
     try {
         const wasOnline = isOnline;
@@ -174,14 +229,21 @@ setInterval(async () => {
     } catch (error) {
         console.error('❌ Error en check periódico:', error);
     }
-}, 1000);
+}, 30000);
 
-// Verificar conexión real inmediatamente
+// Verificar conexión real inmediatamente (sin notificaciones)
 console.log('🚀 Verificación inicial de conexión real');
 checkRealConnectivity().then(realOnline => {
     console.log(`🚀 Conectividad real inicial: ${realOnline}`);
     isOnline = realOnline;
-    updateConnectionStatus();
+    offlineMode = !realOnline;
+    if (!realOnline) {
+        document.body.classList.add('offline-mode');
+    }
+    // Marcar que la carga inicial está completa después de un breve delay
+    setTimeout(() => {
+        initialLoadComplete = true;
+    }, 2000);
 });
 
 // Función para sincronizar cuando vuelve la conexión
@@ -937,31 +999,65 @@ let unreadNotificationCount = 0; // Contador de no leídas
 // Función de notificaciones por email usando Supabase Edge Function
 async function enviarNotificacionesEmailATodos(entrada) {
     try {
-        console.log('📧 Enviando notificación via Supabase Edge Function...');
-        console.log('📧 Datos a enviar:', entrada);
+        console.log('📧 ========== INICIANDO ENVÍO DE NOTIFICACIONES ==========');
+        console.log('📧 Datos de entrada:', JSON.stringify(entrada, null, 2));
+
+        if (!supabaseClient) {
+            throw new Error('Supabase client no disponible');
+        }
 
         // Llamar a la Edge Function de Supabase
+        console.log('📧 Invocando Edge Function: send-entry-notification...');
         const { data, error } = await supabaseClient.functions.invoke('send-entry-notification', {
             body: {
                 entrada: entrada
             }
         });
 
+        console.log('📧 Respuesta de Edge Function:', { data, error });
+
         if (error) {
             console.error('❌ Error en Edge Function:', error);
-            throw error;
+            console.error('❌ Error context:', error.context);
+            console.error('❌ Error message:', error.message);
+            throw new Error(`Edge Function error: ${error.message || JSON.stringify(error)}`);
+        }
+
+        if (data && data.error) {
+            console.error('❌ Error retornado por Edge Function:', data.error);
+            console.error('❌ Detalles:', data.details);
+            throw new Error(`Error en servidor: ${data.error} - ${data.details || ''}`);
         }
 
         console.log('✅ Notificaciones enviadas exitosamente:', data);
 
         // Mostrar confirmación de envío
-        showNotification(`✅ Notificaciones enviadas a ${data.exitos || 0} usuarios`, 'success', 3000);
+        const exitosCount = data?.exitos || 0;
+        const erroresCount = data?.errores || 0;
+
+        if (exitosCount > 0) {
+            showNotification(`✅ Notificaciones enviadas a ${exitosCount} usuarios`, 'success', 3000);
+        } else if (erroresCount > 0) {
+            showNotification(`⚠️ Error enviando notificaciones: ${erroresCount} fallidos`, 'warning', 4000);
+        } else {
+            showNotification('ℹ️ No hay usuarios para notificar', 'info', 3000);
+        }
+
+        console.log('📧 ========== FIN ENVÍO DE NOTIFICACIONES ==========');
+        return data;
 
     } catch (error) {
-        console.error('❌ Error enviando notificaciones:', error);
-        console.error('❌ Detalles del error:', error.message);
-        // Fallback: mostrar notificación local si falla el envío
-        showNotification('⚠️ No se pudieron enviar notificaciones por email, pero la entrada se guardó correctamente', 'warning', 5000);
+        console.error('❌ ========== ERROR EN NOTIFICACIONES ==========');
+        console.error('❌ Error:', error);
+        console.error('❌ Mensaje:', error.message);
+        console.error('❌ Stack:', error.stack);
+
+        // Mostrar notificación con más detalles del error
+        const errorMsg = error.message || 'Error desconocido';
+        showNotification(`⚠️ Error enviando emails: ${errorMsg.substring(0, 50)}...`, 'warning', 5000);
+
+        // No relanzar el error para que no falle el guardado
+        return { error: true, message: errorMsg };
     }
 }
 
@@ -1016,30 +1112,36 @@ async function handleLogin(e) {
         }
         
         currentUser = data.user;
-
-        // Guardar sesión en localStorage para soporte offline
-        localStorage.setItem('bitacora_session', JSON.stringify({
-            user: data.user,
-            expires_at: data.session?.expires_at
-        }));
+        isOnline = true;
+        offlineMode = false;
+        initialLoadComplete = true;
 
         // Establecer información básica del usuario inmediatamente
         document.getElementById('userName').textContent = currentUser.email || 'Sin email';
         document.getElementById('userRole').textContent = '(Cargando...)';
-        
+
         // Mostrar la aplicación principal inmediatamente
         showMain();
-        
+
         // Restablecer botón de login
         loginBtn.textContent = 'Ingresar';
         loginBtn.disabled = false;
         loginError.textContent = '';
-        
+
         // Cargar perfil y entradas en paralelo para mejor rendimiento
         Promise.all([
             getUserProfile().catch(err => console.warn('Error cargando perfil:', err)),
             loadBitacoraEntries().catch(err => console.warn('Error cargando entradas:', err))
         ]).then(() => {
+            // Guardar sesión completa con rol en localStorage después de obtener perfil
+            localStorage.setItem('bitacora_session', JSON.stringify({
+                user: {
+                    ...currentUser,
+                    role: currentUser.role,
+                    nombre: currentUser.name
+                },
+                expires_at: data.session?.expires_at
+            }));
             // Inicializar notificaciones en tiempo real después de cargar todo
             initializeRealtimeNotifications().catch(err => console.warn('Error inicializando notificaciones:', err));
         });
@@ -1073,7 +1175,7 @@ async function handleLogout() {
 // Obtener perfil del usuario
 async function getUserProfile() {
     if (!currentUser) return;
-    
+
     try {
         // Consulta optimizada con timeout para obtener rol y nombre
         const { data, error } = await Promise.race([
@@ -1082,45 +1184,87 @@ async function getUserProfile() {
                 .select('rol, email, nombre')
                 .eq('id', currentUser.id)
                 .single(),
-            new Promise((_, reject) => 
+            new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Timeout')), 3000)
             )
         ]);
-        
+
         if (data) {
-            currentUser.role = data.rol;
+            currentUser.role = data.rol || 'user';
             currentUser.name = data.nombre;
+            currentUser.nombre = data.nombre;
             console.log('👤 Rol del usuario:', data.rol);
             console.log('👤 Nombre del usuario:', data.nombre);
-            
+
             const displayName = data.nombre || currentUser.email || 'Usuario desconocido';
             document.getElementById('userName').textContent = displayName;
             document.getElementById('userRole').textContent = '(' + getRoleDisplayName(data.rol) + ')';
-            
+
             if (data.rol === 'admin') {
                 document.getElementById('manageUsersBtn').style.display = 'block';
             } else {
                 document.getElementById('manageUsersBtn').style.display = 'none';
             }
+
+            // Actualizar localStorage con el rol obtenido
+            updateStoredSession();
         } else {
-            currentUser.role = 'contratista';
+            currentUser.role = 'user';
             const displayName = currentUser.email || 'Usuario desconocido';
             document.getElementById('userName').textContent = displayName;
-            document.getElementById('userRole').textContent = '(' + getRoleDisplayName('contratista') + ')';
+            document.getElementById('userRole').textContent = '(' + getRoleDisplayName('user') + ')';
             const manageUsersBtn = document.getElementById('manageUsersBtn');
             if (manageUsersBtn) {
                 manageUsersBtn.style.display = 'none';
             }
         }
     } catch (error) {
-        const displayName = currentUser.email || 'Usuario desconocido';
+        console.warn('⚠️ Error obteniendo perfil:', error);
+        // Intentar usar rol guardado en localStorage
+        const savedSession = localStorage.getItem('bitacora_session');
+        if (savedSession) {
+            try {
+                const sessionData = JSON.parse(savedSession);
+                if (sessionData.user?.role) {
+                    currentUser.role = sessionData.user.role;
+                    currentUser.nombre = sessionData.user.nombre;
+                }
+            } catch (e) {
+                currentUser.role = 'user';
+            }
+        } else {
+            currentUser.role = 'user';
+        }
+
+        const displayName = currentUser.nombre || currentUser.email || 'Usuario desconocido';
         document.getElementById('userName').textContent = displayName;
-        currentUser.role = 'contratista';
-        document.getElementById('userRole').textContent = '(' + getRoleDisplayName('contratista') + ')';
+        document.getElementById('userRole').textContent = '(' + getRoleDisplayName(currentUser.role) + ')';
         const manageUsersBtn = document.getElementById('manageUsersBtn');
         if (manageUsersBtn) {
-            manageUsersBtn.style.display = 'none';
+            manageUsersBtn.style.display = currentUser.role === 'admin' ? 'block' : 'none';
         }
+    }
+}
+
+// Función auxiliar para actualizar la sesión guardada
+function updateStoredSession() {
+    if (!currentUser) return;
+
+    try {
+        const savedSession = localStorage.getItem('bitacora_session');
+        let sessionData = savedSession ? JSON.parse(savedSession) : { user: {} };
+
+        sessionData.user = {
+            ...sessionData.user,
+            ...currentUser,
+            role: currentUser.role,
+            nombre: currentUser.nombre || currentUser.name
+        };
+
+        localStorage.setItem('bitacora_session', JSON.stringify(sessionData));
+        console.log('💾 Sesión actualizada en localStorage con rol:', currentUser.role);
+    } catch (error) {
+        console.warn('Error actualizando sesión en localStorage:', error);
     }
 }
 
@@ -3027,73 +3171,78 @@ async function checkDatabaseStructure() {
 async function checkAuth() {
     console.log('🔍 Iniciando checkAuth...');
 
-    // NUEVA LÓGICA SIMPLE: SIEMPRE INTENTAR OFFLINE PRIMERO
+    // Obtener sesión offline guardada (para usar como fallback)
     const offlineSession = localStorage.getItem('bitacora_session');
+    let savedSessionData = null;
+
     if (offlineSession) {
         try {
-            const sessionData = JSON.parse(offlineSession);
-            console.log('🔍 Sesión offline encontrada:', sessionData.user?.email);
-
-            currentUser = sessionData.user;
-            currentUser.role = 'user';
-
-            document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-            document.getElementById('userRole').textContent = '(Offline)';
-
-            const manageUsersBtn = document.getElementById('manageUsersBtn');
-            if (manageUsersBtn) {
-                manageUsersBtn.style.display = 'none';
-            }
-
-            showMain();
-            console.log('🔍 Cargando entradas offline...');
-            await loadBitacoraEntries(); // Esta ahora carga offline primero
-            return;
+            savedSessionData = JSON.parse(offlineSession);
+            console.log('🔍 Sesión guardada encontrada:', savedSessionData.user?.email);
         } catch (parseError) {
-            console.warn('Error cargando sesión offline:', parseError);
+            console.warn('Error parseando sesión guardada:', parseError);
         }
     }
 
-    // Si no hay sesión offline, intentar online
+    // PASO 1: Verificar si Supabase está disponible y hay conexión
     if (supabaseClient) {
         try {
-            console.log('🔍 Intentando sesión online...');
-            const { data: { session }, error } = await supabaseClient.auth.getSession();
+            console.log('🔍 Intentando autenticación online...');
 
-            if (error) {
-                console.error('❌ Error obteniendo sesión online:', error);
-                showLogin();
-                return;
-            }
+            // Intentar obtener sesión de Supabase con timeout
+            const sessionPromise = supabaseClient.auth.getSession();
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout')), 5000)
+            );
 
-            if (session) {
+            const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+
+            if (!error && session) {
                 console.log('🔍 Sesión online encontrada:', session.user.email);
                 currentUser = session.user;
+                isOnline = true;
+                offlineMode = false;
 
-                // Intentar obtener perfil
+                // Obtener perfil con rol
                 try {
-                    const { data: profile } = await supabaseClient
-                        .from('profiles')
-                        .select('rol, nombre')
-                        .eq('id', currentUser.id)
-                        .single();
+                    const { data: profile } = await Promise.race([
+                        supabaseClient
+                            .from('profiles')
+                            .select('rol, nombre')
+                            .eq('id', currentUser.id)
+                            .single(),
+                        new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('Timeout')), 3000)
+                        )
+                    ]);
 
                     if (profile) {
                         currentUser.role = profile.rol || 'user';
-                        if (profile.nombre) {
-                            currentUser.nombre = profile.nombre;
-                        }
+                        currentUser.nombre = profile.nombre;
+                        console.log('👤 Rol obtenido:', currentUser.role);
+                    } else {
+                        currentUser.role = 'user';
                     }
                 } catch (profileError) {
                     console.warn('⚠️ Error obteniendo perfil:', profileError);
-                    currentUser.role = 'user';
+                    // Usar rol guardado si existe
+                    currentUser.role = savedSessionData?.user?.role || 'user';
                 }
 
-                document.getElementById('userName').textContent = currentUser.nombre || currentUser.email;
-                document.getElementById('userRole').textContent = getRoleDisplayName(currentUser.role);
+                // Guardar sesión completa con rol para uso offline
+                localStorage.setItem('bitacora_session', JSON.stringify({
+                    user: {
+                        ...currentUser,
+                        role: currentUser.role,
+                        nombre: currentUser.nombre
+                    },
+                    expires_at: session.expires_at
+                }));
 
-                // Guardar sesión offline para futuras cargas
-                localStorage.setItem('bitacora_session', JSON.stringify({ user: currentUser }));
+                // Actualizar UI
+                const displayName = currentUser.nombre || currentUser.email || 'Usuario';
+                document.getElementById('userName').textContent = displayName;
+                document.getElementById('userRole').textContent = '(' + getRoleDisplayName(currentUser.role) + ')';
 
                 const manageUsersBtn = document.getElementById('manageUsersBtn');
                 if (manageUsersBtn) {
@@ -3105,274 +3254,42 @@ async function checkAuth() {
                 return;
             }
         } catch (onlineError) {
-            console.error('❌ Error en autenticación online:', onlineError);
+            console.warn('⚠️ Error en autenticación online:', onlineError.message);
         }
     }
 
-    // Si todo falla, mostrar login
-    console.log('🔍 No se pudo autenticar - mostrando login');
+    // PASO 2: Si no hay sesión online, usar sesión guardada (modo offline)
+    if (savedSessionData && savedSessionData.user) {
+        console.log('🔍 Usando sesión guardada en modo offline');
+
+        currentUser = savedSessionData.user;
+        // Usar el rol guardado, no sobrescribir con 'user'
+        currentUser.role = savedSessionData.user.role || 'user';
+        isOnline = false;
+        offlineMode = true;
+
+        const displayName = currentUser.nombre || currentUser.email || 'Usuario';
+        document.getElementById('userName').textContent = displayName;
+
+        // Mostrar rol guardado con indicador offline
+        const roleDisplay = getRoleDisplayName(currentUser.role);
+        document.getElementById('userRole').textContent = '(' + roleDisplay + ' - Offline)';
+
+        const manageUsersBtn = document.getElementById('manageUsersBtn');
+        if (manageUsersBtn) {
+            // En modo offline, ocultar gestión de usuarios
+            manageUsersBtn.style.display = 'none';
+        }
+
+        document.body.classList.add('offline-mode');
+        showMain();
+        await loadBitacoraEntries();
+        return;
+    }
+
+    // PASO 3: No hay sesión - mostrar login
+    console.log('🔍 No hay sesión - mostrando login');
     showLogin();
-
-    // Verificar disponibilidad de Supabase desde el inicio
-    if (!checkSupabaseAvailability()) {
-        console.log('🔍 Supabase no disponible - cargando modo offline directo');
-        const offlineSession = localStorage.getItem('bitacora_session');
-        if (offlineSession) {
-            try {
-                const sessionData = JSON.parse(offlineSession);
-                console.log('🔍 Sesión offline encontrada:', sessionData.user?.email);
-
-                currentUser = sessionData.user;
-                currentUser.role = 'user';
-
-                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-                document.getElementById('userRole').textContent = '(Offline)';
-
-                const manageUsersBtn = document.getElementById('manageUsersBtn');
-                if (manageUsersBtn) {
-                    manageUsersBtn.style.display = 'none';
-                }
-
-                showMain();
-                console.log('🔍 Cargando entradas offline...');
-                await loadOfflineEntries();
-                return;
-            } catch (parseError) {
-                console.warn('Error cargando sesión offline:', parseError);
-            }
-        }
-        console.log('🔍 No hay sesión offline - mostrando login');
-        showLogin();
-        return;
-    }
-
-    // Si ya se determinó que estamos offline en la inicialización, usar modo offline directo
-    if (!isOnline && offlineMode) {
-        console.log('🔍 Modo offline ya determinado - cargando sesión offline');
-        const offlineSession = localStorage.getItem('bitacora_session');
-        console.log('🔍 Sesión offline disponible:', !!offlineSession);
-
-        if (offlineSession) {
-            try {
-                const sessionData = JSON.parse(offlineSession);
-                console.log('🔍 Cargando sesión offline:', sessionData.user?.email);
-
-                currentUser = sessionData.user;
-                currentUser.role = 'user';
-
-                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-                document.getElementById('userRole').textContent = '(Offline)';
-
-                const manageUsersBtn = document.getElementById('manageUsersBtn');
-                if (manageUsersBtn) {
-                    manageUsersBtn.style.display = 'none';
-                }
-
-                showMain();
-                console.log('🔍 Cargando entradas offline...');
-                await loadOfflineEntries();
-                return;
-            } catch (parseError) {
-                console.warn('Error cargando sesión offline:', parseError);
-            }
-        }
-
-        console.log('🔍 No hay sesión offline - mostrando login');
-        showLogin();
-        return;
-    }
-
-    // Verificar conectividad real si no está determinado
-    const realOnline = await checkRealConnectivity();
-    console.log('🔍 Conectividad real en checkAuth:', realOnline);
-
-    // Si offline, ir directo a modo offline
-    if (!realOnline) {
-        console.log('🔍 SIN CONEXIÓN REAL - modo offline');
-        const offlineSession = localStorage.getItem('bitacora_session');
-        console.log('🔍 Sesión offline disponible:', !!offlineSession);
-
-        if (offlineSession) {
-            try {
-                const sessionData = JSON.parse(offlineSession);
-                console.log('🔍 Cargando sesión offline:', sessionData.user?.email);
-
-                currentUser = sessionData.user;
-                currentUser.role = 'user';
-
-                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-                document.getElementById('userRole').textContent = '(Offline)';
-
-                const manageUsersBtn = document.getElementById('manageUsersBtn');
-                if (manageUsersBtn) {
-                    manageUsersBtn.style.display = 'none';
-                }
-
-                showMain();
-                console.log('🔍 Cargando entradas offline...');
-                await loadOfflineEntries();
-                return;
-            } catch (parseError) {
-                console.warn('Error cargando sesión offline:', parseError);
-            }
-        }
-
-        console.log('🔍 No hay sesión offline - mostrando login');
-        showLogin();
-        return;
-    }
-
-    try {
-        // Si no hay conexión real, forzar modo offline
-        if (!realOnline) {
-            console.log('🔍 SIN CONEXIÓN REAL - forzando modo offline');
-            const offlineSession = localStorage.getItem('bitacora_session');
-            console.log('🔍 Sesión offline en localStorage:', !!offlineSession);
-
-            if (offlineSession) {
-                try {
-                    const sessionData = JSON.parse(offlineSession);
-                    console.log('🔍 Modo offline forzado: sesión encontrada');
-                    console.log('🔍 Usuario offline:', sessionData.user?.email);
-
-                    currentUser = sessionData.user;
-                    currentUser.role = 'user';
-
-                    document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-                    document.getElementById('userRole').textContent = '(Offline)';
-
-                    const manageUsersBtn = document.getElementById('manageUsersBtn');
-                    if (manageUsersBtn) {
-                        manageUsersBtn.style.display = 'none';
-                    }
-
-                    showMain();
-                    await loadOfflineEntries();
-                    return;
-                } catch (parseError) {
-                    console.warn('Error parseando sesión offline:', parseError);
-                }
-            } else {
-                console.log('🔍 No hay sesión offline guardada - mostrando login');
-                showLogin();
-                return;
-            }
-        }
-
-        // Hay conexión, intentar modo online normal
-        console.log('🔍 Conexión real detectada - intentando modo online');
-
-        // Verificar si Supabase está disponible
-        if (!supabaseClient) {
-            console.log('🔍 Supabase no disponible - activando modo offline forzado');
-            offlineMode = true;
-            document.body.classList.add('offline-mode');
-            const offlineSession = localStorage.getItem('bitacora_session');
-            if (offlineSession) {
-                try {
-                    const sessionData = JSON.parse(offlineSession);
-                    currentUser = sessionData.user;
-                    currentUser.role = 'user';
-                    document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-                    document.getElementById('userRole').textContent = '(Offline)';
-                    const manageUsersBtn = document.getElementById('manageUsersBtn');
-                    if (manageUsersBtn) {
-                        manageUsersBtn.style.display = 'none';
-                    }
-                    showMain();
-                    await loadOfflineEntries();
-                    return;
-                } catch (parseError) {
-                    console.warn('Error cargando sesión offline:', parseError);
-                }
-            }
-            showLogin();
-            return;
-        }
-
-        // Intentar obtener sesión de Supabase
-        const { data: { session }, error } = await supabaseClient.auth.getSession();
-
-        if (error) {
-            console.error('❌ Error obteniendo sesión:', error);
-            throw error;
-        }
-
-        if (session) {
-            console.log('🔍 Sesión online encontrada:', session.user.email);
-
-            currentUser = session.user;
-
-            // Intentar obtener perfil, con fallback
-            try {
-                const { data: profile } = await supabaseClient
-                    .from('profiles')
-                    .select('rol')
-                    .eq('id', session.user.id)
-                    .single();
-
-                currentUser.role = profile?.rol || 'user';
-            } catch (profileError) {
-                console.warn('⚠️ Error obteniendo perfil, usando rol por defecto:', profileError);
-                currentUser.role = 'user';
-            }
-
-            // Guardar sesión en localStorage para offline
-            localStorage.setItem('bitacora_session', JSON.stringify({
-                user: currentUser,
-                expires_at: session.expires_at
-            }));
-
-            document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-            document.getElementById('userRole').textContent = '(Online)';
-
-            // Mostrar/ocultar botón admin
-            const manageUsersBtn = document.getElementById('manageUsersBtn');
-            if (manageUsersBtn) {
-                manageUsersBtn.style.display = currentUser.role === 'admin' ? 'block' : 'none';
-            }
-
-            showMain();
-
-            // Cargar datos
-            await loadBitacoraEntries(1, false);
-
-        } else {
-            console.log('🔍 No hay sesión');
-            showLogin();
-        }
-
-    } catch (error) {
-        console.error('❌ Error en checkAuth:', error);
-
-        // Último intento: modo offline forzado
-        const offlineSession = localStorage.getItem('bitacora_session');
-        if (offlineSession) {
-            try {
-                const sessionData = JSON.parse(offlineSession);
-                console.log('🔍 Modo offline forzado por error');
-
-                currentUser = sessionData.user;
-                currentUser.role = 'user';
-
-                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
-                document.getElementById('userRole').textContent = '(Offline)';
-
-                const manageUsersBtn = document.getElementById('manageUsersBtn');
-                if (manageUsersBtn) {
-                    manageUsersBtn.style.display = 'none';
-                }
-
-                showMain();
-                await loadOfflineEntries();
-                return;
-            } catch (parseError) {
-                console.warn('Error en modo offline forzado:', parseError);
-            }
-        }
-
-        showLogin();
-    }
 }
 
 // Función de diagnóstico para modo offline
@@ -3481,6 +3398,82 @@ async function testConnectivity() {
 
     console.log('🧪 ========== PRUEBA COMPLETADA ==========');
     return result;
+}
+
+// Función para probar el envío de emails
+async function testEmailNotification() {
+    console.log('📧 ========== PRUEBA DE ENVÍO DE EMAIL ==========');
+
+    if (!supabaseClient) {
+        console.error('❌ Supabase client no disponible');
+        showNotification('❌ Supabase no disponible', 'error', 3000);
+        return;
+    }
+
+    const entradaPrueba = {
+        titulo: 'PRUEBA - Sistema de Notificaciones',
+        descripcion: 'Esta es una entrada de prueba para verificar que el sistema de notificaciones por email funciona correctamente.',
+        ubicacion: 'Troncal Calle 26',
+        tipo_nota: 'avance',
+        tipoNota: 'avance',
+        estado: 'activo',
+        fecha: new Date().toISOString(),
+        folio: 'TEST-' + Date.now()
+    };
+
+    console.log('📧 Datos de prueba:', entradaPrueba);
+    showNotification('📧 Enviando email de prueba...', 'info', 3000);
+
+    try {
+        const resultado = await enviarNotificacionesEmailATodos(entradaPrueba);
+        console.log('📧 Resultado:', resultado);
+
+        if (resultado && !resultado.error) {
+            console.log('✅ Prueba de email exitosa');
+        } else {
+            console.log('⚠️ Prueba de email con errores');
+        }
+
+        return resultado;
+    } catch (error) {
+        console.error('❌ Error en prueba de email:', error);
+        showNotification('❌ Error: ' + error.message, 'error', 5000);
+        return { error: true, message: error.message };
+    }
+}
+
+// Función para verificar usuarios en profiles
+async function checkEmailRecipients() {
+    console.log('👥 ========== VERIFICACIÓN DE DESTINATARIOS ==========');
+
+    if (!supabaseClient) {
+        console.error('❌ Supabase client no disponible');
+        return;
+    }
+
+    try {
+        const { data: usuarios, error } = await supabaseClient
+            .from('profiles')
+            .select('id, email, nombre, rol')
+            .not('email', 'is', null);
+
+        if (error) {
+            console.error('❌ Error obteniendo usuarios:', error);
+            return;
+        }
+
+        console.log(`👥 Total usuarios con email: ${usuarios.length}`);
+        console.log('👥 Lista de destinatarios:');
+        usuarios.forEach((u, i) => {
+            console.log(`  ${i + 1}. ${u.nombre || 'Sin nombre'} <${u.email}> - Rol: ${u.rol || 'user'}`);
+        });
+
+        showNotification(`👥 ${usuarios.length} usuarios encontrados para notificar`, 'info', 3000);
+        return usuarios;
+    } catch (error) {
+        console.error('❌ Error:', error);
+        return null;
+    }
 }
 
 // Función para verificar estado de IndexedDB
@@ -6951,102 +6944,102 @@ function initializeGenerateCodeForm() {
     if (generateCodeForm && !generateCodeForm.dataset.listenerAdded) {
         generateCodeForm.dataset.listenerAdded = 'true';
         generateCodeForm.addEventListener('submit', async function(e) {
-    console.log('🎫 Formulario de generación de código enviado');
+            console.log('🎫 Formulario de generación de código enviado');
 
-    e.preventDefault();
+            e.preventDefault();
 
-    const generateCodeBtn = document.getElementById('generateCodeBtn');
-    const codeRoleInput = document.getElementById('codeRole');
-    const codeExpirationInput = document.getElementById('codeExpiration');
-    const generatedCodeEl = document.getElementById('generatedCode');
-    const generatedCodeResultEl = document.getElementById('generatedCodeResult');
+            const generateCodeBtn = document.getElementById('generateCodeBtn');
+            const codeRoleInput = document.getElementById('codeRole');
+            const codeExpirationInput = document.getElementById('codeExpiration');
+            const generatedCodeEl = document.getElementById('generatedCode');
+            const generatedCodeResultEl = document.getElementById('generatedCodeResult');
 
-    console.log('🎫 Elementos encontrados:', {
-        generateCodeBtn: !!generateCodeBtn,
-        codeRoleInput: !!codeRoleInput,
-        codeExpirationInput: !!codeExpirationInput,
-        generatedCodeEl: !!generatedCodeEl,
-        generatedCodeResultEl: !!generatedCodeResultEl
-    });
-
-    if (!codeRoleInput) {
-        console.error('❌ Input de rol no encontrado');
-        return;
-    }
-
-    const role = codeRoleInput.value;
-    const expiration = parseInt(codeExpirationInput.value) || 48;
-
-    console.log('🔧 Valores:', {
-        role: role,
-        expiration: expiration,
-        isOnline: isOnline,
-        offlineMode: offlineMode
-    });
-
-    if (!role) {
-        console.error('❌ Rol está vacío');
-        showNotification('❌ Por favor selecciona un rol', 'error');
-        return;
-    }
-
-    try {
-        if (!isOnline) {
-            console.error('❌ Sin conexión - No se puede generar código');
-            showNotification('🔴 Sin conexión - Se requiere internet para generar códigos', 'error', 5000);
-            return;
-        }
-
-        showNotification('✨ Generando código...', 'info');
-
-        console.log('🔧 Llamando RPC: generate_invitation_code');
-
-        const { data: code, error: codeError } = await supabaseClient
-            .rpc('generate_invitation_code', {
-                p_role: role,
-                p_expires_hours: expiration
+            console.log('🎫 Elementos encontrados:', {
+                generateCodeBtn: !!generateCodeBtn,
+                codeRoleInput: !!codeRoleInput,
+                codeExpirationInput: !!codeExpirationInput,
+                generatedCodeEl: !!generatedCodeEl,
+                generatedCodeResultEl: !!generatedCodeResultEl
             });
 
-        console.log('🔧 Respuesta del RPC:', { code, error: codeError });
+            if (!codeRoleInput) {
+                console.error('❌ Input de rol no encontrado');
+                return;
+            }
 
-        if (codeError) {
-            console.error('❌ Error en RPC:', codeError);
-            throw codeError;
-        }
+            const role = codeRoleInput.value;
+            const expiration = parseInt(codeExpirationInput.value) || 48;
 
-        if (!code) {
-            console.error('❌ El código es nulo:', code);
-            throw new Error('El código generado es nulo');
-        }
+            console.log('🔧 Valores:', {
+                role: role,
+                expiration: expiration,
+                isOnline: isOnline,
+                offlineMode: offlineMode
+            });
 
-        console.log('🔧 Código generado:', code);
+            if (!role) {
+                console.error('❌ Rol está vacío');
+                showNotification('❌ Por favor selecciona un rol', 'error');
+                return;
+            }
 
-        if (generatedCodeEl) {
-            generatedCodeEl.textContent = code;
-            console.log('✅ Código asignado al elemento');
-        } else {
-            console.error('❌ Elemento generatedCode no encontrado');
-        }
+            try {
+                if (!isOnline) {
+                    console.error('❌ Sin conexión - No se puede generar código');
+                    showNotification('🔴 Sin conexión - Se requiere internet para generar códigos', 'error', 5000);
+                    return;
+                }
 
-        if (generatedCodeResultEl) {
-            generatedCodeResultEl.style.display = 'block';
-            console.log('✅ Resultado mostrado');
-        } else {
-            console.error('❌ Elemento generatedCodeResult no encontrado');
-        }
+                showNotification('✨ Generando código...', 'info');
 
-        showNotification('✅ Código generado exitosamente: ' + code, 'success');
+                console.log('🔧 Llamando RPC: generate_invitation_code');
 
-        document.getElementById('codeRole').value = '';
+                const { data: code, error: codeError } = await supabaseClient
+                    .rpc('generate_invitation_code', {
+                        p_role: role,
+                        p_expires_hours: expiration
+                    });
 
-        console.log('🔧 Recargando códigos en 500ms...');
-        setTimeout(loadInvitationCodes, 500);
+                console.log('🔧 Respuesta del RPC:', { code, error: codeError });
 
-    } catch (error) {
-        console.error('❌ Error generando código:', error);
-        console.error('❌ Detalles:', error.message, error.code, error.hint);
-        showNotification('❌ Error al generar código: ' + error.message, 'error');
-    }
+                if (codeError) {
+                    console.error('❌ Error en RPC:', codeError);
+                    throw codeError;
+                }
+
+                if (!code) {
+                    console.error('❌ El código es nulo:', code);
+                    throw new Error('El código generado es nulo');
+                }
+
+                console.log('🔧 Código generado:', code);
+
+                if (generatedCodeEl) {
+                    generatedCodeEl.textContent = code;
+                    console.log('✅ Código asignado al elemento');
+                } else {
+                    console.error('❌ Elemento generatedCode no encontrado');
+                }
+
+                if (generatedCodeResultEl) {
+                    generatedCodeResultEl.style.display = 'block';
+                    console.log('✅ Resultado mostrado');
+                } else {
+                    console.error('❌ Elemento generatedCodeResult no encontrado');
+                }
+
+                showNotification('✅ Código generado exitosamente: ' + code, 'success');
+
+                document.getElementById('codeRole').value = '';
+
+                console.log('🔧 Recargando códigos en 500ms...');
+                setTimeout(loadInvitationCodes, 500);
+
+            } catch (error) {
+                console.error('❌ Error generando código:', error);
+                console.error('❌ Detalles:', error.message, error.code, error.hint);
+                showNotification('❌ Error al generar código: ' + error.message, 'error');
+            }
         });
     }
 }
@@ -7093,81 +7086,81 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('📝 Elemento registerWithCodeForm encontrado:', !!registerWithCodeForm);
     if (registerWithCodeForm) {
         registerWithCodeForm.addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const code = document.getElementById('registerInvitationCode').value.trim().toUpperCase();
-    const name = document.getElementById('registerName').value.trim();
-    const email = document.getElementById('registerEmail').value.trim();
-    const password = document.getElementById('registerPassword').value;
-    const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
-    
-    if (password !== passwordConfirm) {
-        showNotification('❌ Las contraseñas no coinciden', 'error');
-        return;
-    }
-    
-    if (password.length < 6) {
-        showNotification('❌ La contraseña debe tener al menos 6 caracteres', 'error');
-        return;
-    }
-    
-    if (name.length < 2) {
-        showNotification('❌ El nombre debe tener al menos 2 caracteres', 'error');
-        return;
-    }
-    
-    if (!supabaseClient) {
-        showNotification('❌ Registro no disponible en modo offline', 'error');
-        return;
-    }
+            e.preventDefault();
 
-    try {
-        showNotification('📝 Registrando usuario...', 'info');
+            const code = document.getElementById('registerInvitationCode').value.trim().toUpperCase();
+            const name = document.getElementById('registerName').value.trim();
+            const email = document.getElementById('registerEmail').value.trim();
+            const password = document.getElementById('registerPassword').value;
+            const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
 
-        const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-            email: email,
-            password: password
-        });
-
-        console.log('🔐 Respuesta de signUp:', { authData, authError });
-
-        if (authError) throw authError;
-        
-        if (authData.user) {
-            const { data: roleData, error: roleError } = await supabaseClient
-                .rpc('redeem_invitation_code', {
-                    p_code: code,
-                    p_user_id: authData.user.id
-                });
-            
-            if (roleError) {
-                showNotification('❌ Error: ' + roleError.message, 'error');
+            if (password !== passwordConfirm) {
+                showNotification('❌ Las contraseñas no coinciden', 'error');
                 return;
             }
-            
-            const { error: updateError } = await supabaseClient
-                .from('profiles')
-                .update({ nombre: name })
-                .eq('id', authData.user.id);
-            
-            if (updateError) {
-                console.warn('⚠️ Error actualizando nombre:', updateError);
+
+            if (password.length < 6) {
+                showNotification('❌ La contraseña debe tener al menos 6 caracteres', 'error');
+                return;
             }
-            
-            showNotification('✅ Registro exitoso. Ahora puedes iniciar sesión.', 'success');
-            closeRegisterModal();
-            document.getElementById('registerWithCodeForm').reset();
-            
-            setTimeout(() => {
-                document.getElementById('email').value = email;
-                document.getElementById('password').focus();
-            }, 500);
-        }
-        
-    } catch (error) {
-        console.error('Error registrando:', error);
-        showNotification('❌ Error al registrar: ' + error.message, 'error');
-    }
+
+            if (name.length < 2) {
+                showNotification('❌ El nombre debe tener al menos 2 caracteres', 'error');
+                return;
+            }
+
+            if (!supabaseClient) {
+                showNotification('❌ Registro no disponible en modo offline', 'error');
+                return;
+            }
+
+            try {
+                showNotification('📝 Registrando usuario...', 'info');
+
+                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                    email: email,
+                    password: password
+                });
+
+                console.log('🔐 Respuesta de signUp:', { authData, authError });
+
+                if (authError) throw authError;
+
+                if (authData.user) {
+                    const { data: roleData, error: roleError } = await supabaseClient
+                        .rpc('redeem_invitation_code', {
+                            p_code: code,
+                            p_user_id: authData.user.id
+                        });
+
+                    if (roleError) {
+                        showNotification('❌ Error: ' + roleError.message, 'error');
+                        return;
+                    }
+
+                    const { error: updateError } = await supabaseClient
+                        .from('profiles')
+                        .update({ nombre: name })
+                        .eq('id', authData.user.id);
+
+                    if (updateError) {
+                        console.warn('⚠️ Error actualizando nombre:', updateError);
+                    }
+
+                    showNotification('✅ Registro exitoso. Ahora puedes iniciar sesión.', 'success');
+                    closeRegisterModal();
+                    document.getElementById('registerWithCodeForm').reset();
+
+                    setTimeout(() => {
+                        document.getElementById('email').value = email;
+                        document.getElementById('password').focus();
+                    }, 500);
+                }
+
+            } catch (error) {
+                console.error('Error registrando:', error);
+                showNotification('❌ Error al registrar: ' + error.message, 'error');
+            }
         });
     }
 });

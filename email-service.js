@@ -3,6 +3,11 @@
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
 
+// Configuración
+const SUPABASE_URL = 'https://mqxguprzpypcyyusvfrf.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xeGd1cHJ6cHlwY3l5dXN2ZnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNjc4NjEsImV4cCI6MjA4MTg0Mzg2MX0.OXxl1n3a0Y5HtoUUBnm-vEE1WvAY86VJvdQ0phAsoSY';
+const FRONTEND_URL = 'https://bitacoradigital1509.com';
+
 const resend = new Resend(process.env.RESEND_API_KEY || 're_bKJkXN7K_MqTjYz8Gt1eiJjW7HBm2GY4n');
 
 // Verificar conexión con Resend
@@ -13,14 +18,15 @@ async function notificarATodosUsuarios(entrada) {
   try {
     // Obtener todos los usuarios de Supabase
     const supabase = createClient(
-      process.env.SUPABASE_URL || 'https://mqxguprzpypcyyusvfrf.supabase.co',
-      process.env.SUPABASE_ANON_KEY || 'tu-anon-key'
+      process.env.SUPABASE_URL || SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY
     );
 
+    // Usar tabla 'profiles' en lugar de 'usuarios'
     const { data: usuarios, error } = await supabase
-      .from('usuarios')
+      .from('profiles')
       .select('email, nombre')
-      .eq('activo', true);
+      .not('email', 'is', null);
 
     if (error) throw error;
 
@@ -31,7 +37,7 @@ async function notificarATodosUsuarios(entrada) {
 
     // Enviar email masivo con Resend
     const { data, error: sendError } = await resend.emails.send({
-      from: 'Bitácora de Obra <onboarding@resend.dev>',
+      from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
       to: destinatarios,
       subject: `🔔 Nueva entrada: ${entrada.titulo}`,
       html: generarContenidoEmailMasivo(usuarios, entrada)
@@ -55,7 +61,7 @@ async function notificarATodosUsuarios(entrada) {
 async function enviarEmailIndividual(usuario, entrada) {
   try {
     const { data, error } = await resend.emails.send({
-      from: 'Bitácora de Obra <onboarding@resend.dev>',
+      from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
       to: [usuario.email],
       subject: `🔔 Nueva entrada: ${entrada.titulo}`,
       html: generarContenidoEmailMasivo([usuario], entrada)
@@ -107,7 +113,7 @@ function generarContenidoEmailMasivo(usuarios, entrada) {
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL || 'https://tu-dominio.com'}" style="background: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+            <a href="${process.env.FRONTEND_URL || FRONTEND_URL}" style="background: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
               📋 Ver en Bitácora
             </a>
           </div>
@@ -151,22 +157,22 @@ async function probarEmail() {
 
     // Obtener usuarios de prueba (los primeros 2 usuarios activos)
     const supabase = createClient(
-      process.env.SUPABASE_URL || 'https://mqxguprzpypcyyusvfrf.supabase.co',
-      process.env.SUPABASE_ANON_KEY || 'tu-anon-key'
+      process.env.SUPABASE_URL || SUPABASE_URL,
+      process.env.SUPABASE_ANON_KEY || SUPABASE_ANON_KEY
     );
 
     const { data: usuarios, error } = await supabase
-      .from('usuarios')
+      .from('profiles')
       .select('email, nombre')
-      .eq('activo', true)
+      .not('email', 'is', null)
       .limit(2);
 
     if (error || !usuarios || usuarios.length === 0) {
       console.log('⚠️ No hay usuarios activos para probar. Usando email de prueba.');
       // Enviar a un email de prueba si no hay usuarios
       const { data, error: sendError } = await resend.emails.send({
-        from: 'Bitácora de Obra <onboarding@resend.dev>',
-        to: [process.env.TEST_EMAIL || 'test@example.com'],
+        from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
+        to: [process.env.TEST_EMAIL || 'yesidgaviria00@gmail.com'],
         subject: `🧪 PRUEBA - ${entradaPrueba.titulo}`,
         html: generarContenidoEmailMasivo([{ nombre: 'Usuario de Prueba' }], entradaPrueba)
       });

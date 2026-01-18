@@ -521,7 +521,31 @@ main {
     min-width: auto;
   }
 
-  
+  .filter-actions {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 0.5rem;
+    justify-content: center;
+  }
+
+  .download-pdf-btn,
+  .clear-filters-btn {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .download-pdf-btn,
+  .clear-filters-btn {
+    width: 100%;
+    margin-right: 0;
+  }
 }
 
 /* Zoom responsive - vista principal tabla y cards */

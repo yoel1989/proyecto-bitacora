@@ -4,27 +4,42 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 console.log("Email notification function initialized!")
 
 Deno.serve(async (req) => {
+  console.log('=== Edge Function invocada ===')
+  console.log('Method:', req.method)
+  console.log('Origin:', req.headers.get('origin'))
+  console.log('URL:', req.url)
+
+  // Allowed origins including www variant
+  const allowedOrigins = [
+    'https://bitacoradigital1509.com',
+    'https://www.bitacoradigital1509.com',
+    'http://127.0.0.1:3000',
+    'http://localhost:3000',
+    'http://127.0.0.1:5500',
+    'http://localhost:5500'
+  ]
+
+  const origin = req.headers.get('origin') || ''
+  const allowedOrigin = allowedOrigins.includes(origin) ? origin : '*'
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    const origin = req.headers.get('origin') || ''
-    const allowedOrigins = ['https://bitacoradigital1509.com', 'http://127.0.0.1:3000', 'http://localhost:3000']
-
+    console.log('Handling CORS preflight')
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Allow-Origin': allowedOrigin,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
         'Access-Control-Max-Age': '86400',
       },
     })
   }
 
   try {
-    const origin = req.headers.get('origin') || ''
-    const allowedOrigins = ['https://bitacoradigital1509.com', 'http://127.0.0.1:3000', 'http://localhost:3000']
     const corsHeaders = {
-      'Access-Control-Allow-Origin': allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
+      'Access-Control-Allow-Origin': allowedOrigin,
+      'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
       'Content-Type': 'application/json'
     }
 
@@ -94,14 +109,25 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Send individual emails to each user
+    // Send individual emails to each user with delay to avoid rate limit
     let exitos = 0
     let errores = 0
     const resultados: any[] = []
+    const emailHtml = generarEmailHtml(entrada, usuarios.length)
 
-    for (const usuario of usuarios) {
+    // Helper function to delay between requests
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    for (let i = 0; i < usuarios.length; i++) {
+      const usuario = usuarios[i]
+
+      // Add delay between requests to avoid rate limit (max 2 per second)
+      if (i > 0) {
+        await delay(600) // 600ms delay = ~1.6 requests per second (safe margin)
+      }
+
       try {
-        const emailHtml = generarEmailHtml(entrada, usuarios.length)
+        console.log('Enviando email a: ' + usuario.email)
 
         const resendResponse = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -120,6 +146,7 @@ Deno.serve(async (req) => {
         if (resendResponse.ok) {
           exitos++
           resultados.push({ email: usuario.email, success: true })
+          console.log('Email enviado exitosamente a: ' + usuario.email)
         } else {
           errores++
           const errorData = await resendResponse.text()

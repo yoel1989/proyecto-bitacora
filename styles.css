@@ -634,8 +634,8 @@ main {
 
 .filter-actions {
   display: flex;
-  flex-direction: row;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   margin-left: 1rem;
   min-width: 130px;
 }

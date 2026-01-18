@@ -9,12 +9,31 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 console.log("Email notification function initialized!")
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Access-Control-Allow-Origin': 'http://127.0.0.1:3000',
+        'Access-Control-Allow-Methods': 'POST',
+        'Access-Control-Allow-Headers': '*',
+        'Access-Control-Max-Age': '86400',
+      },
+    });
+  }
+
   try {
     // Only allow POST requests
     if (req.method !== 'POST') {
       return new Response(
         JSON.stringify({ error: 'Method not allowed' }),
-        { status: 405, headers: { "Content-Type": "application/json" } }
+        {
+          status: 405,
+          headers: {
+            "Content-Type": "application/json",
+            'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'
+          }
+        }
       )
     }
 
@@ -23,7 +42,13 @@ Deno.serve(async (req) => {
     if (!entrada) {
       return new Response(
         JSON.stringify({ error: 'Faltan datos de la entrada' }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        {
+          status: 400,
+          headers: {
+            "Content-Type": "application/json",
+            'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'
+          }
+        }
       )
     }
 
@@ -37,9 +62,9 @@ Deno.serve(async (req) => {
 
     // Get all active users
     const { data: usuarios, error } = await supabaseClient
-      .from('usuarios')
+      .from('profiles')
       .select('email, nombre')
-      .eq('activo', true)
+      .not('email', 'is', null)
 
     if (error) {
       console.error('❌ Error obteniendo usuarios:', error)
@@ -56,7 +81,12 @@ Deno.serve(async (req) => {
           exitos: 0,
           errores: 0
         }),
-        { headers: { "Content-Type": "application/json" } }
+        {
+          headers: {
+            "Content-Type": "application/json",
+            'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'
+          }
+        }
       )
     }
 
@@ -77,7 +107,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'Bitácora de Obra <onboarding@resend.dev>',
+        from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
         to: destinatarios,
         subject: `🔔 Nueva entrada: ${entrada.titulo}`,
         html: emailContent
@@ -101,7 +131,12 @@ Deno.serve(async (req) => {
         errores: 0,
         resendResult
       }),
-      { headers: { "Content-Type": "application/json" } }
+      {
+        headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'
+        }
+      }
     )
 
   } catch (error) {
@@ -111,7 +146,13 @@ Deno.serve(async (req) => {
         error: 'Error enviando notificación',
         details: error.message
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          'Access-Control-Allow-Origin': 'http://127.0.0.1:3000'
+        }
+      }
     )
   }
 })

@@ -1619,18 +1619,19 @@ async function handleBitacoraSubmit(e) {
             console.log('📧 offlineMode:', offlineMode);
 
             const condition1 = !editId;
-            const condition2 = data && data[0];
+            const condition2 = data && (Array.isArray(data) ? data[0] : data);
             const condition3 = isOnline;
 
             console.log('📧 Condición 1 (!editId):', condition1);
-            console.log('📧 Condición 2 (data && data[0]):', condition2);
+            console.log('📧 Condición 2 (data && entrada):', condition2);
             console.log('📧 Condición 3 (isOnline):', condition3);
             console.log('📧 TODAS las condiciones:', condition1 && condition2 && condition3);
 
-            if (!editId && data && data[0] && isOnline) {
+            if (!editId && data && isOnline) {
                 console.log('📧 ✅ CONDICIONES CUMPLIDAS - ENVIANDO NOTIFICACIONES...');
+                const entrada = Array.isArray(data) ? data[0] : data;
                 try {
-                    await enviarNotificacionesEmailATodos(data[0]);
+                    await enviarNotificacionesEmailATodos(entrada);
                     console.log('📧 ✅ Notificaciones por email enviadas exitosamente');
                 } catch (emailError) {
                     console.error('❌ Error enviando emails:', emailError);
@@ -1641,7 +1642,6 @@ async function handleBitacoraSubmit(e) {
                 console.log('📧 Razón del fallo:');
                 if (editId) console.log('  - Es una edición (editId existe)');
                 if (!data) console.log('  - No hay datos');
-                if (!data?.[0]) console.log('  - data[0] no existe');
                 if (!isOnline) console.log('  - No está online');
             }
 

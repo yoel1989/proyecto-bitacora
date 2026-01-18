@@ -940,7 +940,7 @@ async function enviarNotificacionesEmailATodos(entrada) {
         console.log('📧 Enviando notificación al backend...');
 
         // Llamar al backend para enviar notificaciones
-        const response = await fetch('https://tu-backend-desplegado.com/api/send-entry-notification', {
+        const response = await fetch('https://proyecto-bitacora.onrender.com/api/send-entry-notification', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

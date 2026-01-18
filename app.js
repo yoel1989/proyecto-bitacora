@@ -1506,6 +1506,8 @@ async function handleBitacoraSubmit(e) {
         }
     } else {
         // Crear nueva entrada
+        console.log('👤 Usuario actual:', currentUser);
+        console.log('🔐 Sesión actual:', await supabaseClient.auth.getSession());
         let currentlyOnline = navigator.onLine;
         console.log('📝 ========== CREANDO ENTRADA ==========');
         console.log('📝 currentlyOnline:', currentlyOnline);

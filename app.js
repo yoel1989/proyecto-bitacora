@@ -394,18 +394,32 @@ async function uploadFileToR2(file) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('fileName', file.name);
-    
-    const response = await fetch(`${R2_WORKER_URL}/upload`, {
-        method: 'POST',
-        body: formData
-    });
-    
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error subiendo archivo');
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos timeout
+
+        const response = await fetch(`${R2_WORKER_URL}/upload`, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Error subiendo archivo');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('❌ Error en uploadFileToR2:', error);
+        if (error.name === 'AbortError') {
+            throw new Error('Timeout: La subida del archivo tardó demasiado');
+        }
+        throw new Error('Error de conexión al subir archivo: ' + error.message);
     }
-    
-    return await response.json();
 }
 
 async function deleteFileFromR2(fileName) {
@@ -1352,16 +1366,20 @@ async function handleBitacoraSubmit(e) {
                     continue; // Saltar este archivo cuando está offline
                 }
 
-                const uploadData = await uploadFileToR2(file);
-
-                newArchivoUrls.push({
-                    url: uploadData.url,
-                    name: file.name,
-                    type: file.type,
-                    size: file.size
-                });
+                try {
+                    const uploadData = await uploadFileToR2(file);
+                    newArchivoUrls.push({
+                        url: uploadData.url,
+                        name: file.name,
+                        type: file.type,
+                        size: file.size
+                    });
+                } catch (uploadError) {
+                    console.error('❌ Error subiendo archivo:', file.name, uploadError);
+                    showNotification(`⚠️ No se pudo subir "${file.name}". La entrada se guardará sin este archivo.`, 'warning', 5000);
+                }
             }
-            
+
             if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
                 // Agregar nuevos archivos a los existentes
                 archivoUrls = [...archivoUrls, ...newArchivoUrls];
@@ -1414,14 +1432,19 @@ async function handleBitacoraSubmit(e) {
                     continue; // Saltar este archivo cuando está offline
                 }
 
-                const uploadData = await uploadFileToR2(file);
-
-                archivoUrls.push({
-                    url: uploadData.url,
-                    name: file.name,
-                    type: file.type,
-                    size: file.size
-                });
+                try {
+                    const uploadData = await uploadFileToR2(file);
+                    archivoUrls.push({
+                        url: uploadData.url,
+                        name: file.name,
+                        type: file.type,
+                        size: file.size
+                    });
+                } catch (uploadError) {
+                    console.error('❌ Error subiendo archivo:', file.name, uploadError);
+                    showNotification(`⚠️ No se pudo subir "${file.name}". La entrada se guardará sin este archivo.`, 'warning', 5000);
+                    // Continuar con los demás archivos
+                }
             }
         }
 

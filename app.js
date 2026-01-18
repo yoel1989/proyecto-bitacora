@@ -5547,6 +5547,14 @@ async function submitReply(parentCommentId) {
             console.log('📧 Condición 3 (isOnline):', condition3);
             console.log('📧 TODAS las condiciones:', condition1 && condition2 && condition3);
 
+            console.log('📧 ========== EVALUANDO CONDICIONES ==========');
+            console.log('📧 if (!editId && data && data[0] && isOnline) {');
+            console.log('📧   !editId =', !editId);
+            console.log('📧   data =', !!data);
+            console.log('📧   data[0] =', !!data?.[0]);
+            console.log('📧   isOnline =', isOnline);
+            console.log('📧   RESULTADO =', !editId && data && data[0] && isOnline);
+
             if (!editId && data && data[0] && isOnline) {
                 console.log('📧 ✅ CONDICIONES CUMPLIDAS - ENVIANDO NOTIFICACIONES...');
                 try {

@@ -37,7 +37,7 @@ async function notificarATodosUsuarios(entrada) {
 
     // Enviar email masivo con Resend
     const { data, error: sendError } = await resend.emails.send({
-      from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
+      from: 'Bitacora de Obra <bitacora@bitacoradigital1509.com>',
       to: destinatarios,
       subject: `🔔 Nueva entrada: ${entrada.titulo}`,
       html: generarContenidoEmailMasivo(usuarios, entrada)
@@ -61,7 +61,7 @@ async function notificarATodosUsuarios(entrada) {
 async function enviarEmailIndividual(usuario, entrada) {
   try {
     const { data, error } = await resend.emails.send({
-      from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
+      from: 'Bitacora de Obra <bitacora@bitacoradigital1509.com>',
       to: [usuario.email],
       subject: `🔔 Nueva entrada: ${entrada.titulo}`,
       html: generarContenidoEmailMasivo([usuario], entrada)
@@ -171,7 +171,7 @@ async function probarEmail() {
       console.log('⚠️ No hay usuarios activos para probar. Usando email de prueba.');
       // Enviar a un email de prueba si no hay usuarios
       const { data, error: sendError } = await resend.emails.send({
-        from: 'Bitácora de Obra <bitacora@bitacoradigital1509.com>',
+        from: 'Bitacora de Obra <bitacora@bitacoradigital1509.com>',
         to: [process.env.TEST_EMAIL || 'yesidgaviria00@gmail.com'],
         subject: `🧪 PRUEBA - ${entradaPrueba.titulo}`,
         html: generarContenidoEmailMasivo([{ nombre: 'Usuario de Prueba' }], entradaPrueba)

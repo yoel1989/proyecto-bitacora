@@ -12,6 +12,39 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+// Endpoint para enviar notificaciones de nuevas entradas
+app.post('/api/send-entry-notification', async (req, res) => {
+    try {
+        const { entrada } = req.body;
+
+        if (!entrada) {
+            return res.status(400).json({
+                error: 'Faltan datos de la entrada'
+            });
+        }
+
+        console.log('📧 Enviando notificación de nueva entrada:', entrada.titulo);
+
+        // Usar el servicio de email para notificar a todos
+        const { notificarATodosUsuarios } = require('./email-service');
+        const resultado = await notificarATodosUsuarios(entrada);
+
+        console.log('✅ Notificaciones enviadas:', resultado);
+        res.json({
+            success: true,
+            message: `Notificaciones enviadas: ${resultado.exitos} exitosas, ${resultado.errores} errores`,
+            ...resultado
+        });
+
+    } catch (error) {
+        console.error('❌ Error enviando notificación:', error);
+        res.status(500).json({
+            error: 'Error enviando notificación',
+            details: error.message
+        });
+    }
+});
+
 // Endpoint para enviar correo de invitación
 app.post('/api/send-invitation', async (req, res) => {
     try {

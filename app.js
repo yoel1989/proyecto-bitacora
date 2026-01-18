@@ -934,60 +934,37 @@ let notificationChannel = null;
 let notifications = []; // Lista de notificaciones
 let unreadNotificationCount = 0; // Contador de no leídas
 
-// Función de notificaciones por email
+// Función de notificaciones por email usando backend
 async function enviarNotificacionesEmailATodos(entrada) {
     try {
-        // Obtener todos los usuarios activos
-        const { data: usuarios, error } = await supabaseClient
-            .from('usuarios')
-            .select('email, nombre')
-            .eq('activo', true);
-        
-        if (error) throw error;
-        
-        console.log(`📧 Preparando notificación para ${usuarios.length} usuarios...`);
-        
-        // Enviar email usando EmailJS (funciona en frontend sin backend)
-        for (const usuario of usuarios) {
-            await enviarEmailConEmailJS(usuario, entrada);
+        console.log('📧 Enviando notificación al backend...');
+
+        // Llamar al backend para enviar notificaciones
+        const response = await fetch('https://tu-backend-desplegado.com/api/send-entry-notification', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                entrada: entrada
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Error del servidor: ${response.status}`);
         }
-        
-        
-        
+
+        const resultado = await response.json();
+        console.log('✅ Notificaciones enviadas exitosamente:', resultado);
+
     } catch (error) {
-        console.error('❌ Error en notificaciones por email:', error);
-        throw error;
+        console.error('❌ Error enviando notificaciones:', error);
+        // Fallback: mostrar notificación local si falla el envío
+        showNotification('⚠️ No se pudieron enviar notificaciones por email, pero la entrada se guardó correctamente', 'warning', 5000);
     }
 }
 
-// Enviar email individual con EmailJS
-async function enviarEmailConEmailJS(usuario, entrada) {
-    const templateParams = {
-        to_email: usuario.email,
-        to_name: usuario.nombre || 'Usuario',
-        from_name: 'Bitácora de Obra',
-        entry_title: entrada.titulo,
-        entry_description: entrada.descripcion || 'Sin descripción',
-        entry_location: entrada.ubicacion,
-        entry_type: entrada.tipo_nota,
-        entry_date: new Date(entrada.fecha).toLocaleString('es-ES'),
-        entry_folio: entrada.folio,
-        reply_to: 'noreply@bitacora.com'
-    };
-    
-    try {
-        await emailjs.send(
-            'service_tu_service_id',    // Reemplazar con tu Service ID
-            'template_tu_template_id',  // Reemplazar con tu Template ID
-            templateParams,
-            'tu_public_key'              // Reemplazar con tu Public Key
-        );
-        
-    } catch (error) {
-        console.error(`❌ Error enviando a ${usuario.email}:`, error);
-        throw error;
-    }
-}
+// Función eliminada - ahora usa el backend para notificaciones
 
 // Funciones de pantalla
 function showLogin() {

@@ -5,8 +5,8 @@ const nodemailer = require('nodemailer');
 const transporter = nodemailer.createTransporter({
   service: 'gmail',
   auth: {
-    user: 'tu-email@gmail.com',
-    pass: 'tu-contraseña-de-aplicacion'
+    user: process.env.GMAIL_USER || 'tu-email@gmail.com',
+    pass: process.env.GMAIL_APP_PASSWORD || 'tu-contraseña-de-aplicacion'
   }
 });
 
@@ -23,30 +23,36 @@ transporter.verify((error, success) => {
 async function notificarATodosUsuarios(entrada) {
   try {
     // Obtener todos los usuarios de Supabase
+    const { createClient } = require('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL || 'https://mqxguprzpypcyyusvfrf.supabase.co',
+      process.env.SUPABASE_ANON_KEY || 'tu-anon-key'
+    );
+
     const { data: usuarios, error } = await supabase
       .from('usuarios')
       .select('email, nombre')
       .eq('activo', true);
-    
+
     if (error) throw error;
-    
+
     console.log(`📧 Enviando notificación a ${usuarios.length} usuarios...`);
-    
+
     // Enviar email a cada usuario
-    const promesas = usuarios.map(usuario => 
+    const promesas = usuarios.map(usuario =>
       enviarEmailIndividual(usuario, entrada)
     );
-    
+
     const resultados = await Promise.allSettled(promesas);
-    
+
     // Contar éxitos y errores
     const exitos = resultados.filter(r => r.status === 'fulfilled').length;
     const errores = resultados.filter(r => r.status === 'rejected').length;
-    
+
     console.log(`✅ Emails enviados: ${exitos} | ❌ Errores: ${errores}`);
-    
+
     return { exitos, errores };
-    
+
   } catch (error) {
     console.error('❌ Error en notificación masiva:', error);
     throw error;
@@ -113,19 +119,32 @@ function generarContenidoEmail(usuario, entrada) {
   };
 }
 
+// Endpoint para recibir notificaciones desde el frontend
+async function enviarNotificacionDesdeFrontend(entrada) {
+  try {
+    console.log('📧 Recibida solicitud de notificación desde frontend');
+    const resultado = await notificarATodosUsuarios(entrada);
+    return { success: true, ...resultado };
+  } catch (error) {
+    console.error('❌ Error procesando notificación desde frontend:', error);
+    throw error;
+  }
+}
+
 // Función de prueba
 async function probarEmail() {
   try {
-    const usuarioPrueba = { email: 'tu-email@gmail.com', nombre: 'Usuario Prueba' };
+    const usuarioPrueba = { email: process.env.GMAIL_USER || 'tu-email@gmail.com', nombre: 'Usuario Prueba' };
     const entradaPrueba = {
       titulo: 'Entrada de Prueba',
       descripcion: 'Esta es una entrada de prueba para verificar el sistema de notificaciones',
       ubicacion: 'Sitio de Prueba',
-      tipoNota: 'avance',
+      tipo_nota: 'avance',
       estado: 'pendiente',
-      fecha: new Date().toISOString()
+      fecha: new Date().toISOString(),
+      folio: 'TEST-001'
     };
-    
+
     await enviarEmailIndividual(usuarioPrueba, entradaPrueba);
     console.log('🎉 Email de prueba enviado exitosamente');
   } catch (error) {
@@ -136,5 +155,6 @@ async function probarEmail() {
 module.exports = {
   notificarATodosUsuarios,
   enviarEmailIndividual,
+  enviarNotificacionDesdeFrontend,
   probarEmail
 };

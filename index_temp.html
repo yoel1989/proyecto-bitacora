@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>📋 Bitácora de Obra</title>
-    <link rel="stylesheet" href="styles.css?v=20250117">
-    <link rel="stylesheet" href="comments-buttons.css?v=20250117">
-    <link rel="stylesheet" href="comments-modal.css?v=20250117">
+    <link rel="stylesheet" href="styles.css?v=20250112-CONECTIVIDAD_REAL">
+    <link rel="stylesheet" href="comments-buttons.css?v=20250112">
+    <link rel="stylesheet" href="comments-modal.css?v=20250112">
     <script>
         // Función para cargar scripts externos con manejo de errores
         function loadExternalScript(src, name) {
@@ -25,7 +25,7 @@
             });
         }
 
-        // Cargar scripts externos
+        // Cargar scripts externos (simplificado)
         Promise.all([
             loadExternalScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', 'Supabase'),
             loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jsPDF'),
@@ -40,24 +40,46 @@
                 console.log('✅ config.js cargado');
                 // Cargar app.js
                 const appScript = document.createElement('script');
-                appScript.src = 'app.js?v=20250117';
-                appScript.onload = () => console.log('✅ app.js cargado - VERSION CONECTIVIDAD_REAL');
+                appScript.src = 'app.js?v=20250116';
+                appScript.onload = () => console.log('✅ app.js cargado');
                 appScript.onerror = () => console.error('❌ Error cargando app.js');
                 document.head.appendChild(appScript);
             };
             configScript.onerror = () => console.error('❌ Error cargando config.js');
             document.head.appendChild(configScript);
         });
+
+        // Cargar otros scripts en paralelo
+        Promise.all([
+            supabasePromise,
+            loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jsPDF'),
+            loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas')
+        ]).then(() => {
+            if (!window.offlineForced) {
+                console.log('🔧 Scripts externos cargados (o fallaron gracefully)');
+                console.log('🔧 Supabase disponible:', window.supabaseAvailable);
+
+                // Cargar config.js después de los scripts externos
+                const configScript = document.createElement('script');
+                configScript.src = 'config.js';
+                configScript.onload = () => {
+                    console.log('✅ config.js cargado');
+                // Ahora cargar app.js
+                const appScript = document.createElement('script');
+                appScript.src = 'app.js?v=20250116-CONECTIVIDAD_REAL';
+                appScript.onload = () => console.log('✅ app.js cargado - VERSION CONECTIVIDAD_REAL');
+                appScript.onerror = () => console.error('❌ Error cargando app.js');
+                document.head.appendChild(appScript);
+                };
+                configScript.onerror = () => console.error('❌ Error cargando config.js');
+                document.head.appendChild(configScript);
+            }
+        });
     </script>
 </head>
 <body>
     <div id="app">
 
-
-        <!-- INDICADOR DE MODO OFFLINE -->
-        <div id="offlineIndicator" style="position: fixed; top: 50px; right: 10px; background: orange; color: black; padding: 8px 12px; border-radius: 5px; z-index: 9999; font-size: 12px; font-weight: bold; display: none;">
-            🔌 MODO OFFLINE ACTIVADO
-        </div>
 
         <!-- Login Screen -->
         <div id="loginScreen">

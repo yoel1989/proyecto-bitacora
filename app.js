@@ -1,32 +1,187 @@
 // Supabase client está configurado en config.js
 // Asegúrate de que config.js se cargue antes que app.js
 
+// Registrar Service Worker para modo offline
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        // Usar ruta relativa para compatibilidad con diferentes entornos
+        navigator.serviceWorker.register('./sw.js')
+            .then((registration) => {
+                console.log('✅ Service Worker registrado:', registration.scope);
+
+                // Escuchar actualizaciones del SW
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    if (newWorker) {
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                // Nueva versión disponible
+                                showNotification('🔄 Nueva versión disponible. Actualiza la página para aplicar cambios.', 'info', 5000);
+                            }
+                        });
+                    }
+                });
+            })
+            .catch((error) => {
+                console.error('❌ Error registrando Service Worker:', error);
+            });
+    });
+} else {
+    console.warn('⚠️ Service Worker no soportado en este navegador');
+}
+
 if (typeof window !== 'undefined' && window.indexedDB) {
     // IndexedDB está disponible
 } else {
     console.error('❌ IndexedDB no está disponible');
 }
 
+// Función para verificar y actualizar estado de conexión
+async function updateConnectionStatus() {
+    const wasOnline = isOnline;
+    const navigatorOnline = navigator.onLine;
+
+    // Usar verificación REAL de conectividad, no solo navigator.onLine
+    console.log('📡 🔍 VERIFICANDO CONECTIVIDAD REAL...');
+    showNotification('🔍 Verificando conexión a internet...', 'info', 2000);
+
+    const realOnline = await checkRealConnectivity().catch(() => false);
+    isOnline = realOnline;
+
+    console.log(`📡 updateConnectionStatus: wasOnline=${wasOnline}, isOnline=${isOnline}, navigator.onLine=${navigatorOnline}, realOnline=${realOnline}, offlineMode=${offlineMode}`);
+
+    if (wasOnline !== isOnline) {
+        console.log(`📡 Estado de conexión cambió: ${wasOnline} -> ${isOnline}`);
+        if (isOnline) {
+            console.log('🟢 Conexión real restaurada - activando modo online');
+            offlineMode = false;
+            document.body.classList.remove('offline-mode');
+            showNotification('🟢 Conexión restaurada', 'success', 2000);
+            syncOfflineQueue();
+            loadBitacoraEntries(1, false);
+        } else {
+            console.log('🔴 Sin conexión REAL detectada - recargando página en modo offline');
+            offlineMode = true;
+            document.body.classList.add('offline-mode');
+            showNotification('🔴 Conexión perdida - Reiniciando en modo offline...', 'warning', 3000);
+
+            // Recargar la página para que se inicie correctamente en offline
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+        }
+    } else {
+        console.log('📡 Estado de conexión sin cambios');
+    }
+}
+
 // Detectar cambios de conexión
-window.addEventListener('online', () => {
-    console.log('🟢 Conexión restaurada');
-    isOnline = true;
-    offlineMode = false;
-    document.body.classList.remove('offline-mode');
-    showNotification('🟢 Conexión restaurada', 'success', 2000);
-    syncOfflineQueue();
-    // Recargar entradas desde Supabase
-    loadBitacoraEntries(1, false);
+window.addEventListener('online', async () => {
+    console.log('🎯 Evento "online" disparado - verificando conexión real');
+    await updateConnectionStatus();
 });
 
-window.addEventListener('offline', () => {
-    console.log('🔴 Sin conexión - Modo offline activado');
-    isOnline = false;
-    offlineMode = true;
-    document.body.classList.add('offline-mode');
-    showNotification('🔴 Sin conexión - Trabajando offline', 'warning', 5000);
-    // Cargar entradas desde IndexedDB
-    loadOfflineEntries();
+window.addEventListener('offline', async () => {
+    console.log('🎯 Evento "offline" disparado - verificando pérdida de conexión');
+    await updateConnectionStatus();
+});
+
+// Función para verificar conectividad real con ping
+async function checkRealConnectivity() {
+    try {
+        console.log('🌐 Verificando conectividad real...');
+
+        // Intentar hacer un fetch rápido a un endpoint confiable
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout más largo: 5 segundos
+
+        const response = await fetch('https://httpbin.org/status/200', {
+            method: 'HEAD',
+            mode: 'no-cors',
+            cache: 'no-cache',
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+        console.log('✅ Ping exitoso - conexión real disponible');
+        return true;
+    } catch (error) {
+        console.log('❌ Ping falló - sin conexión real:', error.message);
+
+        // Verificación adicional: intentar con un endpoint diferente
+        try {
+            console.log('🌐 Intentando verificación secundaria...');
+            const controller2 = new AbortController();
+            const timeoutId2 = setTimeout(() => controller2.abort(), 3000);
+
+            await fetch('https://www.google.com/favicon.ico', {
+                method: 'HEAD',
+                mode: 'no-cors',
+                cache: 'no-cache',
+                signal: controller2.signal
+            });
+
+            clearTimeout(timeoutId2);
+            console.log('✅ Verificación secundaria exitosa');
+            return true;
+        } catch (error2) {
+            console.log('❌ Verificación secundaria también falló:', error2.message);
+            return false;
+        }
+    }
+}
+
+// Check periódico de conectividad REAL (cada 1 segundo - ultra agresivo)
+console.log('🌐 Iniciando check periódico de conectividad (cada 1 segundo)');
+setInterval(async () => {
+    try {
+        const wasOnline = isOnline;
+        const realOnline = await checkRealConnectivity();
+
+        // Log solo cuando hay cambio o cada 10 checks
+        if (realOnline !== wasOnline || Math.random() < 0.1) {
+            console.log(`🌐 Check periódico: wasOnline=${wasOnline}, realOnline=${realOnline}, current isOnline=${isOnline}`);
+        }
+
+        if (realOnline !== wasOnline) {
+            console.log(`🌐 ========== CAMBIO DETECTADO: ${wasOnline} -> ${realOnline} ==========`);
+
+            if (realOnline) {
+                console.log('🟢 CONEXIÓN RESTAURADA - activando modo online');
+                isOnline = true;
+                offlineMode = false;
+                document.body.classList.remove('offline-mode');
+                showNotification('🟢 Conexión restaurada', 'success', 2000);
+
+                // Sincronizar y recargar
+                console.log('🟢 Sincronizando queue...');
+                await syncOfflineQueue();
+                console.log('🟢 Recargando entradas...');
+                await loadBitacoraEntries(1, false);
+                console.log('🟢 Modo online activado completamente');
+            } else {
+                console.log('🔴 CONEXIÓN PERDIDA - activando modo offline');
+                isOnline = false;
+                offlineMode = true;
+                document.body.classList.add('offline-mode');
+                showNotification('🔴 Sin conexión - Trabajando offline', 'warning', 5000);
+
+                console.log('🔴 Cargando entradas offline...');
+                await loadOfflineEntries();
+                console.log('🔴 Modo offline activado completamente');
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error en check periódico:', error);
+    }
+}, 1000);
+
+// Verificar conexión real inmediatamente
+console.log('🚀 Verificación inicial de conexión real');
+checkRealConnectivity().then(realOnline => {
+    console.log(`🚀 Conectividad real inicial: ${realOnline}`);
+    isOnline = realOnline;
+    updateConnectionStatus();
 });
 
 // Función para sincronizar cuando vuelve la conexión
@@ -72,6 +227,10 @@ async function syncOfflineQueue() {
 
 // Crear entrada online (usar Supabase)
 async function createEntryOnline(entryData) {
+    if (!supabaseClient) {
+        throw new Error('Supabase no disponible - no se puede crear entrada online');
+    }
+
     const { data, error } = await supabaseClient
         .from('bitacora')
         .insert([{
@@ -95,6 +254,10 @@ async function createEntryOnline(entryData) {
 
 // Actualizar entrada online
 async function updateEntryOnline(entryData) {
+    if (!supabaseClient) {
+        throw new Error('Supabase no disponible - no se puede actualizar entrada online');
+    }
+
     const { error } = await supabaseClient
         .from('bitacora')
         .update({
@@ -114,6 +277,10 @@ async function updateEntryOnline(entryData) {
 
 // Eliminar entrada online
 async function deleteEntryOnline(id) {
+    if (!supabaseClient) {
+        throw new Error('Supabase no disponible - no se puede eliminar entrada online');
+    }
+
     const { error } = await supabaseClient
         .from('bitacora')
         .delete()
@@ -124,59 +291,95 @@ async function deleteEntryOnline(id) {
 
 // Cargar entradas desde IndexedDB cuando está offline
 async function loadOfflineEntries() {
-    console.log('🔧 loadOfflineEntries() - FUNCIÓN LLAMADA');
-    console.log('🔧 dbManager existe:', !!dbManager);
-    console.log('🔧 isOnline:', isOnline);
-    console.log('🔧 offlineMode:', offlineMode);
+    console.log('🔧 ========== LOAD OFFLINE ENTRIES ==========');
+    console.log('🔧 Timestamp:', new Date().toISOString());
+    console.log('🔧 Estado del sistema:');
+    console.log('  - navigator.onLine:', navigator.onLine);
+    console.log('  - isOnline:', isOnline);
+    console.log('  - offlineMode:', offlineMode);
+    console.log('  - dbManager existe:', !!dbManager);
+    console.log('  - currentUser existe:', !!currentUser);
 
     try {
+        console.log('🔧 Verificando dbManager...');
         if (!dbManager) {
-            console.error('❌ dbManager no está disponible');
-            showNotification('❌ Error: Base de datos offline no disponible', 'error', 3000);
+            console.error('❌ dbManager no disponible');
+            showNotification('❌ Base de datos offline no disponible', 'error', 3000);
             return;
         }
 
-        console.log('🔧 Llamando a dbManager.getAllEntries()...');
+        console.log('🔧 dbManager encontrado, inicializando si es necesario...');
+        // Asegurar que IndexedDB esté inicializado
+        if (!dbManager.db) {
+            console.log('🔧 Inicializando IndexedDB...');
+            await dbManager.init();
+            console.log('✅ IndexedDB inicializado en loadOfflineEntries');
+        }
 
+        console.log('🔧 Consultando IndexedDB...');
         const offlineEntries = await dbManager.getAllEntries();
+        console.log(`📦 IndexedDB retornó ${offlineEntries.length} entradas`);
 
-        console.log('🔧 Resultado getAllEntries:', offlineEntries?.length || 0, 'entradas');
+        // Log detallado de las entradas
+        if (offlineEntries.length > 0) {
+            console.log('📦 Detalles de entradas encontradas:');
+            offlineEntries.forEach((entry, index) => {
+                console.log(`  ${index + 1}. ID: ${entry.id}, Título: ${entry.titulo}, Fecha: ${entry.fecha}`);
+            });
+        }
 
         if (offlineEntries.length === 0) {
-            console.log('ℹ️ No hay entradas offline');
-            showNotification('ℹ️ No hay datos offline disponibles', 'info', 2000);
+            console.log('ℹ️ No hay entradas en IndexedDB');
+            showNotification('ℹ️ No hay datos offline disponibles', 'info', 3000);
+            // Limpiar UI
+            allEntries = [];
+            totalEntries = 0;
+            currentPage = 1;
+            await filterAndDisplayEntries();
+            updatePaginationInfo();
             return;
         }
 
-        console.log(`📦 Cargadas ${offlineEntries.length} entradas desde IndexedDB`);
-
-        // Usar las mismas funciones de procesamiento
-        allEntries = offlineEntries.map(entry => {
-            const email = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
-            return {
-                ...entry,
-                profiles: {
-                    email: email
-                }
-            };
-        });
+        console.log('🔧 Procesando entradas para UI...');
+        // Procesar entradas
+        allEntries = offlineEntries.map(entry => ({
+            ...entry,
+            profiles: {
+                email: entry.profiles?.email || entry.user_id || 'Usuario offline'
+            }
+        }));
 
         totalEntries = offlineEntries.length;
         currentPage = 1;
 
-        console.log('🔧 allEntries actualizado:', allEntries.length);
-        console.log('🔧 Llamando a filterAndDisplayEntries()...');
+        console.log(`✅ Procesadas ${allEntries.length} entradas para UI`);
+        console.log('✅ Primera entrada procesada:', allEntries[0] ? {
+            id: allEntries[0].id,
+            titulo: allEntries[0].titulo,
+            fecha: allEntries[0].fecha,
+            email: allEntries[0].profiles?.email
+        } : 'Ninguna');
 
         // Actualizar UI
+        console.log('🔧 Actualizando interfaz...');
         await filterAndDisplayEntries();
         updatePaginationInfo();
 
-        console.log('🔧 UI actualizada con entradas offline');
+        console.log('✅ ========== CARGA OFFLINE COMPLETADA ==========');
+        showNotification(`📦 ${offlineEntries.length} entradas cargadas (offline)`, 'success', 2000);
 
-        showNotification(`📦 ${offlineEntries.length} entradas cargadas offline`, 'info', 2000);
     } catch (error) {
-        console.error('❌ Error cargando entradas offline:', error);
-        showNotification('❌ Error cargando datos offline: ' + error.message, 'error', 3000);
+        console.error('❌ ========== ERROR EN CARGA OFFLINE ==========');
+        console.error('❌ Error:', error);
+        console.error('❌ Stack:', error.stack);
+        showNotification('❌ Error cargando datos offline', 'error', 3000);
+
+        // Limpiar UI en caso de error
+        allEntries = [];
+        totalEntries = 0;
+        currentPage = 1;
+        await filterAndDisplayEntries();
+        updatePaginationInfo();
     }
 }
 
@@ -255,26 +458,337 @@ let totalEntries = 0;
 let isOnline = true;
 let offlineMode = false;
 
-// Mock dbManager object for offline functionality
-let dbManager = {
-    saveEntry: async (entry) => {
-        console.log('📦 Mock saveEntry:', entry);
-    },
-    getAllEntries: async () => {
-        console.log('📦 Mock getAllEntries');
-        return [];
-    },
-    getQueueItems: async () => {
-        console.log('📦 Mock getQueueItems');
-        return [];
-    },
-    markQueueItemAsSynced: async (id) => {
-        console.log('📦 Mock markQueueItemAsSynced:', id);
-    },
-    addToQueue: async (action, entry) => {
-        console.log('📦 Mock addToQueue:', action, entry);
+// IndexedDB Manager para funcionalidad offline
+class IndexedDBManager {
+    constructor() {
+        this.dbName = 'BitacoraDB';
+        this.version = 3;
+        this.db = null;
     }
-};
+
+    async init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.version);
+
+            request.onerror = () => {
+                console.error('❌ Error abriendo IndexedDB:', request.error);
+                reject(request.error);
+            };
+
+            request.onsuccess = () => {
+                this.db = request.result;
+                console.log('✅ IndexedDB inicializada');
+                resolve();
+            };
+
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                console.log('🔧 Actualizando IndexedDB...');
+
+                // Crear object store para entradas
+                if (!db.objectStoreNames.contains('entries')) {
+                    const entriesStore = db.createObjectStore('entries', { keyPath: 'id' });
+                    entriesStore.createIndex('fecha', 'fecha', { unique: false });
+                    entriesStore.createIndex('user_id', 'user_id', { unique: false });
+                    console.log('📦 Object store "entries" creado');
+                }
+
+                // Crear object store para queue de sincronización
+                if (!db.objectStoreNames.contains('syncQueue')) {
+                    const queueStore = db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
+                    queueStore.createIndex('action', 'action', { unique: false });
+                    queueStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    console.log('📦 Object store "syncQueue" creado');
+                }
+            };
+        });
+    }
+
+    async saveEntry(entry) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['entries'], 'readwrite');
+            const store = transaction.objectStore('entries');
+
+            const request = store.put(entry);
+
+            request.onsuccess = () => {
+                console.log('✅ Entrada guardada en IndexedDB:', entry.id);
+                resolve(entry);
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error guardando entrada:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async getAllEntries() {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['entries'], 'readonly');
+            const store = transaction.objectStore('entries');
+            const index = store.index('fecha');
+
+            const request = index.openCursor(null, 'prev'); // Orden descendente por fecha
+            const results = [];
+
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    results.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    console.log(`📦 ${results.length} entradas recuperadas de IndexedDB`);
+                    resolve(results);
+                }
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error obteniendo entradas:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async getEntryById(id) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['entries'], 'readonly');
+            const store = transaction.objectStore('entries');
+
+            const request = store.get(id);
+
+            request.onsuccess = () => {
+                resolve(request.result);
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error obteniendo entrada:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async deleteEntry(id) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['entries'], 'readwrite');
+            const store = transaction.objectStore('entries');
+
+            const request = store.delete(id);
+
+            request.onsuccess = () => {
+                console.log('✅ Entrada eliminada de IndexedDB:', id);
+                resolve();
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error eliminando entrada:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async addToQueue(action, data) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['syncQueue'], 'readwrite');
+            const store = transaction.objectStore('syncQueue');
+
+            const queueItem = {
+                action,
+                data,
+                timestamp: new Date().toISOString(),
+                synced: false
+            };
+
+            const request = store.add(queueItem);
+
+            request.onsuccess = () => {
+                console.log('✅ Item agregado al queue:', action, request.result);
+                resolve(request.result);
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error agregando al queue:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async getQueueItems() {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['syncQueue'], 'readonly');
+            const store = transaction.objectStore('syncQueue');
+            const index = store.index('timestamp');
+
+            const request = index.openCursor(null, 'next'); // Orden ascendente por timestamp
+            const results = [];
+
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    results.push(cursor.value);
+                    cursor.continue();
+                } else {
+                    console.log(`📦 ${results.length} items en queue recuperados`);
+                    resolve(results);
+                }
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error obteniendo queue:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async markQueueItemAsSynced(id) {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['syncQueue'], 'readwrite');
+            const store = transaction.objectStore('syncQueue');
+
+            const request = store.get(id);
+
+            request.onsuccess = () => {
+                const item = request.result;
+                if (item) {
+                    item.synced = true;
+                    item.syncedAt = new Date().toISOString();
+
+                    const updateRequest = store.put(item);
+                    updateRequest.onsuccess = () => {
+                        console.log('✅ Item marcado como sincronizado:', id);
+                        resolve();
+                    };
+                    updateRequest.onerror = () => {
+                        console.error('❌ Error actualizando item:', updateRequest.error);
+                        reject(updateRequest.error);
+                    };
+                } else {
+                    resolve(); // Item no encontrado, asumir ya sincronizado
+                }
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error obteniendo item para marcar:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async clearSyncedQueueItems() {
+        if (!this.db) await this.init();
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction(['syncQueue'], 'readwrite');
+            const store = transaction.objectStore('syncQueue');
+
+            const request = store.openCursor();
+
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    if (cursor.value.synced) {
+                        cursor.delete();
+                    }
+                    cursor.continue();
+                } else {
+                    console.log('🧹 Queue limpiado');
+                    resolve();
+                }
+            };
+
+            request.onerror = () => {
+                console.error('❌ Error limpiando queue:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+}
+
+// Inicializar dbManager
+let dbManager = new IndexedDBManager();
+
+// Inicializar aplicación
+(async () => {
+    console.log('🚀 ========== INICIANDO APLICACIÓN ==========');
+    console.log('🚀 Timestamp:', new Date().toISOString());
+    console.log('🔥 Aplicación iniciada con verificación de conectividad real');
+
+    try {
+        await dbManager.init();
+        console.log('🚀 IndexedDB inicializado');
+
+        // Verificar conectividad REAL desde el inicio
+        console.log('📱 Verificando conectividad real al inicio...');
+        try {
+            const realOnline = await checkRealConnectivity();
+            console.log('🚀 Conectividad real al inicio:', realOnline);
+
+            if (realOnline && supabaseClient) {
+                console.log('🟢 Conexión real detectada - modo online');
+                isOnline = true;
+                offlineMode = false;
+            } else {
+                console.log('🔴 Sin conexión REAL detectada - activando modo offline');
+                offlineMode = true;
+                isOnline = false;
+                document.body.classList.add('offline-mode');
+                showNotification('🔴 Sin conexión - Trabajando en modo offline', 'warning', 3000);
+
+                // Cargar datos offline en lugar de recargar la página
+                await loadOfflineEntries();
+            }
+        } catch (error) {
+            console.log('⚠️ Error verificando conectividad, asumiendo offline:', error);
+            isOnline = false;
+            offlineMode = true;
+            document.body.classList.add('offline-mode');
+        }
+
+        // Verificar estado de IndexedDB
+        console.log('🚀 Verificando datos en IndexedDB...');
+        try {
+            const entries = await dbManager.getAllEntries();
+            console.log(`🚀 IndexedDB contiene ${entries.length} entradas`);
+        } catch (dbError) {
+            console.warn('🚀 Error verificando IndexedDB:', dbError);
+        }
+
+        console.log('🚀 ========== INICIALIZACIÓN COMPLETADA ==========');
+
+    } catch (error) {
+        console.error('❌ Error inicializando:', error);
+
+        // AGRESIVO: Si hay error en inicialización, forzar offline
+        console.log('🚨 ERROR EN INICIALIZACIÓN - forzando offline');
+        offlineMode = true;
+        isOnline = false;
+        document.body.classList.add('offline-mode');
+
+        showNotification('🚨 Modo offline forzado por error de inicialización', 'warning', 5000);
+
+        // Intentar continuar con offline
+        try {
+            await checkAuth();
+        } catch (authError) {
+            console.error('❌ Error en checkAuth offline:', authError);
+            showNotification('❌ Error crítico - aplicación no disponible', 'error', 10000);
+        }
+    }
+})();
 let commentFiles = []; // Archivos para el comentario principal
 let replyFiles = {}; // Archivos para respuestas (key: commentId)
 
@@ -290,6 +804,8 @@ let virtualBufferSize = 10;
 
 // Variable para manejar errores 409
 let errorRetryCount = new Map();
+
+
 
 // Función para reintentar llamadas con backoff exponencial
 async function retryWithBackoff(operation, maxRetries = 3) {
@@ -479,7 +995,13 @@ function showMain() {
 // Login
 async function handleLogin(e) {
     e.preventDefault();
-    
+
+    // Verificar si Supabase está disponible
+    if (!supabaseClient) {
+        showLoginError('Modo offline: No se puede iniciar sesión sin conexión a internet.');
+        return;
+    }
+
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
     const loginBtn = document.getElementById('loginBtn');
@@ -502,7 +1024,13 @@ async function handleLogin(e) {
         }
         
         currentUser = data.user;
-        
+
+        // Guardar sesión en localStorage para soporte offline
+        localStorage.setItem('bitacora_session', JSON.stringify({
+            user: data.user,
+            expires_at: data.session?.expires_at
+        }));
+
         // Establecer información básica del usuario inmediatamente
         document.getElementById('userName').textContent = currentUser.email || 'Sin email';
         document.getElementById('userRole').textContent = '(Cargando...)';
@@ -537,8 +1065,15 @@ async function handleLogin(e) {
 async function handleLogout() {
     // Limpiar notificaciones en tiempo real
     cleanupRealtimeNotifications();
-    
-    await supabaseClient.auth.signOut();
+
+    // Limpiar sesión offline
+    localStorage.removeItem('bitacora_session');
+
+    // Solo hacer signOut si Supabase está disponible
+    if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+    }
+
     currentUser = null;
     showLogin();
 }
@@ -717,12 +1252,38 @@ function hideForm() {
 // Guardar entrada
 async function handleBitacoraSubmit(e) {
     e.preventDefault();
-    
-    const form = document.getElementById('bitacoraForm');
-    const editId = form.dataset.editId;
-    const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
-    
-    const fotoFiles = allSelectedFiles.length > 0 ? allSelectedFiles : document.getElementById('fotos').files;
+
+    try {
+        console.log('📝 ========== handleBitacoraSubmit INICIADO ==========');
+        console.log('📝 Estado del sistema:');
+        console.log('  - navigator.onLine:', navigator.onLine);
+        console.log('  - isOnline:', isOnline);
+        console.log('  - offlineMode:', offlineMode);
+        console.log('  - currentUser:', !!currentUser);
+
+        const form = document.getElementById('bitacoraForm');
+        const editId = form.dataset.editId;
+        const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
+
+        const fotoFiles = allSelectedFiles.length > 0 ? allSelectedFiles : document.getElementById('fotos').files;
+
+        console.log('  - fotoFiles.length:', fotoFiles.length);
+
+        // Advertir sobre archivos offline (solo si realmente está offline)
+        console.log('📝 Verificando condición offline:', { offlineMode, fotoFilesLength: fotoFiles.length });
+        if (offlineMode && fotoFiles.length > 0) {
+        console.log('📝 Mostrando advertencia de archivos offline');
+        const proceed = confirm('⚠️ Estás offline. Los archivos adjuntos NO se guardarán. Solo se guardará el texto de la entrada. ¿Deseas continuar?');
+        if (!proceed) {
+            console.log('📝 Usuario canceló guardado offline con archivos');
+            return;
+        }
+    } else {
+        console.log('📝 No se muestra advertencia (online o sin archivos)');
+    }
+
+    console.log('📝 Continuando con el guardado...');
+
     let archivoUrls = [];
     
     if (editId) {
@@ -784,10 +1345,15 @@ async function handleBitacoraSubmit(e) {
                 // Limpiar el nombre del archivo para evitar caracteres problemáticos
                 const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const fileName = `${Date.now()}_${cleanFileName}`;
-                
-                // Subir archivo a Cloudflare R2
+
+                // Subir archivo a Cloudflare R2 (solo si está online)
+                if (!navigator.onLine) {
+                    console.log('🔴 Offline: omitiendo subida de archivo', file.name);
+                    continue; // Saltar este archivo cuando está offline
+                }
+
                 const uploadData = await uploadFileToR2(file);
-                
+
                 newArchivoUrls.push({
                     url: uploadData.url,
                     name: file.name,
@@ -841,10 +1407,15 @@ async function handleBitacoraSubmit(e) {
                 // Limpiar el nombre del archivo para evitar caracteres problemáticos
                 const cleanFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
                 const fileName = `${Date.now()}_${cleanFileName}`;
-                
-                // Subir archivo a Cloudflare R2
+
+                // Subir archivo a Cloudflare R2 (solo si está online)
+                if (!navigator.onLine) {
+                    console.log('🔴 Offline: omitiendo subida de archivo', file.name);
+                    continue; // Saltar este archivo cuando está offline
+                }
+
                 const uploadData = await uploadFileToR2(file);
-                
+
                 archivoUrls.push({
                     url: uploadData.url,
                     name: file.name,
@@ -852,10 +1423,9 @@ async function handleBitacoraSubmit(e) {
                     size: file.size
                 });
             }
-            
-}           
-    
-const fechaInput = document.getElementById('fecha').value;
+        }
+
+    const fechaInput = document.getElementById('fecha').value;
     // console.log('Fecha del input:', fechaInput);
     // console.log('📍 Zona horaria actual:', Intl.DateTimeFormat().resolvedOptions().timeZone);
     
@@ -915,51 +1485,88 @@ const fechaInput = document.getElementById('fecha').value;
 data = updateData;
         error = updateError;
     } else {
-        let data, error;
+        // Crear nueva entrada
+        let currentlyOnline = navigator.onLine;
+        console.log('📝 ========== CREANDO ENTRADA ==========');
+        console.log('📝 currentlyOnline:', currentlyOnline);
+        console.log('📝 navigator.onLine:', navigator.onLine);
+        console.log('📝 isOnline:', isOnline);
 
-        if (isOnline) {
-            // Crear nueva entrada en Supabase (online)
-            const result = await supabaseClient
-                .from('bitacora')
-                .insert(formData)
-                .select()
-                .single();
+        if (currentlyOnline) {
+            try {
+                // Crear nueva entrada en Supabase (online)
+                const result = await supabaseClient
+                    .from('bitacora')
+                    .insert(formData)
+                    .select()
+                    .single();
 
-            data = result.data;
-            error = result.error;
+                data = result.data;
+                error = result.error;
 
-            if (!error && data) {
-                // Guardar en IndexedDB para soporte offline
-                await dbManager.saveEntry({
-                    ...formData,
-                    id: data.id,
-                    folio: data.folio,
-                    fecha_hora: data.fecha_hora,
-                    created_at: data.created_at
-                });
-                console.log('✅ Entrada guardada en IndexedDB');
+                if (!error && data) {
+                    // Guardar en IndexedDB para soporte offline
+                    await dbManager.saveEntry({
+                        ...formData,
+                        id: data.id,
+                        folio: data.folio,
+                        fecha_hora: data.fecha_hora,
+                        created_at: data.created_at
+                    });
+                    console.log('✅ Entrada guardada en IndexedDB');
+                }
+            } catch (onlineError) {
+                console.warn('⚠️ Error guardando online, intentando offline:', onlineError);
+                currentlyOnline = false; // Fallback a offline
             }
-        } else {
-            // Guardar solo en IndexedDB (offline)
-            console.log('🔴 Modo offline - Guardando entrada en IndexedDB');
+        }
 
-            const tempId = Date.now();
+        if (!currentlyOnline) {
+            // Guardar solo en IndexedDB (offline)
+            console.log('🔴 ========== GUARDANDO ENTRADA OFFLINE ==========');
+            console.log('🔴 currentUser:', currentUser);
+
+            const tempId = Date.now().toString();
             const offlineEntry = {
                 ...formData,
                 id: tempId,
                 folio: formData.folio,
                 fecha_hora: formData.fecha,
                 created_at: new Date().toISOString(),
-                isOffline: true
+                isOffline: true,
+                user_id: currentUser?.id || 'offline_user'
             };
 
-            await dbManager.saveEntry(offlineEntry);
-            await dbManager.addToQueue('create_entry', offlineEntry);
-            console.log('✅ Entrada guardada en IndexedDB (offline)');
+            console.log('🔴 Datos a guardar:', {
+                id: offlineEntry.id,
+                titulo: offlineEntry.titulo,
+                fecha: offlineEntry.fecha,
+                folio: offlineEntry.folio,
+                user_id: offlineEntry.user_id
+            });
 
-            data = [offlineEntry];
-            error = null;
+            try {
+                console.log('🔴 Guardando en IndexedDB...');
+                await dbManager.saveEntry(offlineEntry);
+                console.log('🔴 Agregando a queue...');
+                await dbManager.addToQueue('create_entry', offlineEntry);
+                console.log('✅ Entrada guardada exitosamente en IndexedDB');
+
+                // Verificar que se guardó
+                const savedEntries = await dbManager.getAllEntries();
+                console.log(`✅ Verificación: ${savedEntries.length} entradas en IndexedDB después de guardar`);
+
+                data = [offlineEntry];
+                error = null;
+
+                console.log('🔴 ========== GUARDADO OFFLINE COMPLETADO ==========');
+            } catch (saveError) {
+                console.error('❌ Error guardando offline:', saveError);
+                console.error('❌ Stack trace:', saveError.stack);
+                throw saveError;
+            }
         }
+    }
 
         if (error) {
             console.error('Error guardando:', error);
@@ -996,101 +1603,126 @@ data = updateData;
                 alert(isOnline ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)');
             }
         }
+    } catch (error) {
+        console.error('❌ ========== ERROR EN handleBitacoraSubmit ==========');
+        console.error('❌ Error:', error);
+        console.error('❌ Stack:', error.stack);
+        showNotification('❌ Error al guardar la entrada: ' + error.message, 'error', 5000);
     }
 }
 
 // Cargar entradas con paginación y optimización
 async function loadBitacoraEntries(page = 1, append = false) {
-    if (isLoadingEntries) return;
-
     isLoadingEntries = true;
     showLoadingIndicator();
 
     try {
-        if (isOnline) {
-            const offset = (page - 1) * ENTRIES_PER_PAGE;
-
-            // Consulta optimizada con timeout
-            const result = await Promise.race([
-                supabaseClient
-                    .from('bitacora')
-                    .select('*', { count: 'exact' })
-                    .order('fecha', { ascending: false })
-                    .range(offset, offset + ENTRIES_PER_PAGE - 1),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('Timeout')), 5000)
-                )
-            ]);
-
-            const { data: bitacoraData, error, count } = result;
-
-            if (error) {
-                console.error('Error al cargar entradas:', error);
-                showNotification('❌ Error al cargar las entradas', 'error');
+        // Siempre intentar cargar desde online primero si Supabase está disponible
+        if (supabaseClient) {
+            console.log('🌐 Intentando cargar entradas desde online...');
+            try {
+                await loadBitacoraEntriesOnline(page, append);
+                console.log('✅ Entradas cargadas desde online exitosamente');
                 return;
+            } catch (onlineError) {
+                console.warn('⚠️ Error cargando desde online, intentando offline:', onlineError.message);
             }
-
-            // Procesar entradas inmediatamente sin esperar perfiles
-            const processedEntries = bitacoraData.map(entry => {
-                // Determinar el email a mostrar
-                let email = entry.user_id || 'Usuario desconocido';
-
-                // Si la entrada es del usuario actual, usar su email directamente
-                if (currentUser && entry.user_id === currentUser.id && currentUser.email) {
-                    email = currentUser.email;
-                }
-
-                return {
-                    ...entry,
-                    profiles: {
-                        email: email
-                    }
-                };
-            });
-
-            // Actualizar datos globales
-            if (append && page > 1) {
-                allEntries = [...allEntries, ...processedEntries];
-            } else {
-                allEntries = processedEntries;
-                currentPage = page;
-            }
-
-            totalEntries = count || 0;
-
-            updatePaginationInfo();
-
-            // Actualizar UI primero con los datos disponibles
-            filterAndDisplayEntries();
-
-            // Luego cargar emails de usuarios en segundo plano y actualizar solo los elementos existentes
-            if (bitacoraData.length > 0) {
-                loadUserEmailsInBackground(processedEntries).catch(err => {
-                    console.warn('Error cargando emails en segundo plano:', err);
-                });
-            }
-
-            // Ocultar botón de cargar más si no hay más entradas
-            const loadMoreBtn = document.getElementById('loadMoreBtn');
-            if (loadMoreBtn) {
-                loadMoreBtn.style.display = allEntries.length >= totalEntries ? 'none' : 'block';
-            }
-        } else {
-            // Offline: No hacer nada, ya se cargó desde IndexedDB
-            console.log('🔴 Modo offline - Las entradas ya fueron cargadas desde IndexedDB');
         }
 
+        // Fallback a offline
+        console.log('🔴 Cargando entradas desde offline...');
+        await loadOfflineEntries();
+        console.log('✅ Entradas cargadas desde offline');
+
     } catch (error) {
-        console.error('Error inesperado al cargar entradas:', error);
-        showNotification('❌ Error al cargar las entradas', 'error');
+        console.error('❌ Error crítico cargando entradas:', error);
+        showNotification('❌ Error cargando entradas', 'error');
     } finally {
         isLoadingEntries = false;
         hideLoadingIndicator();
     }
 }
 
+// Función separada para cargar desde online
+async function loadBitacoraEntriesOnline(page = 1, append = false) {
+    if (!supabaseClient) {
+        throw new Error('Supabase no disponible');
+    }
+
+    console.log('🌐 Cargando desde online...');
+    const offset = (page - 1) * ENTRIES_PER_PAGE;
+
+    const result = await Promise.race([
+        supabaseClient
+            .from('bitacora')
+            .select('*', { count: 'exact' })
+            .order('fecha', { ascending: false })
+            .range(offset, offset + ENTRIES_PER_PAGE - 1),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Timeout online')), 15000)
+        )
+    ]);
+
+    const { data: bitacoraData, error, count } = result;
+
+    if (error) {
+        throw error;
+    }
+
+    // Procesar datos online
+    const processedEntries = bitacoraData.map(entry => ({
+        ...entry,
+        profiles: {
+            email: entry.user_id || 'Usuario desconocido'
+        }
+    }));
+
+    // Actualizar datos globales
+    if (append && page > 1) {
+        allEntries = [...allEntries, ...processedEntries];
+    } else {
+        allEntries = processedEntries;
+        currentPage = page;
+    }
+
+    totalEntries = count || 0;
+    updatePaginationInfo();
+
+    // Guardar en IndexedDB para offline
+    try {
+        console.log('💾 Guardando en IndexedDB...');
+        for (const entry of processedEntries) {
+            await dbManager.saveEntry(entry);
+        }
+    } catch (dbError) {
+        console.warn('⚠️ Error guardando en IndexedDB:', dbError);
+    }
+
+    // Actualizar UI
+    filterAndDisplayEntries();
+
+    // Cargar emails en segundo plano
+    if (bitacoraData.length > 0) {
+        loadUserEmailsInBackground(processedEntries).catch(err => {
+            console.warn('Error cargando emails:', err);
+        });
+    }
+
+    // Actualizar paginación
+    const loadMoreBtn = document.getElementById('loadMoreBtn');
+    if (loadMoreBtn) {
+        loadMoreBtn.style.display = allEntries.length >= totalEntries ? 'none' : 'block';
+    }
+
+    console.log('✅ Online cargado exitosamente');
+}
+
 // Obtener email de usuario desde auth (función admin)
 async function getUserEmailFromAuth(userId) {
+    if (!supabaseClient) {
+        return null;
+    }
+
     try {
         // Esta función requiere privilegios de admin para consultar otros usuarios
         // Si tienes permisos de admin, puedes usar esta consulta
@@ -1998,13 +2630,24 @@ function showAllPhotos(entryId) {
 // Editar entrada
 async function editEntry(entryId) {
     try {
-        const { data, error } = await supabaseClient
-            .from('bitacora')
-            .select('*')
-            .eq('id', entryId)
-            .single();
+        let data, error;
 
-        if (error) {
+        if (isOnline) {
+            // Intentar cargar desde Supabase
+            const result = await supabaseClient
+                .from('bitacora')
+                .select('*')
+                .eq('id', entryId)
+                .single();
+            data = result.data;
+            error = result.error;
+        } else {
+            // Cargar desde IndexedDB si offline
+            data = await dbManager.getEntryById(entryId);
+            error = data ? null : new Error('Entrada no encontrada offline');
+        }
+
+        if (error || !data) {
             showNotification('❌ Error al cargar la entrada para editar', 'error');
             return;
         }
@@ -2180,63 +2823,81 @@ async function deleteEntry(entryId) {
             console.log('🗑️ Eliminando entrada:', entryId);
             showNotification('🔄 Eliminando entrada...', 'info', 2000);
 
-            // 1. Primero obtener la entrada para ver si tiene archivos
-            const { data: entry, error: fetchError } = await supabaseClient
-                .from('bitacora')
-                .select('*')
-                .eq('id', entryId)
-                .single();
+            let entry, fetchError;
 
-            if (fetchError) {
-                console.error('❌ Error obteniendo entrada:', fetchError);
-                throw new Error('No se pudo obtener la entrada: ' + fetchError.message);
-            }
-
-            // 2. Eliminar archivos del storage si existen
-            const archivos = entry.archivos || entry.fotos || [];
-            if (archivos.length > 0) {
-                console.log('🗂️ Eliminando', archivos.length, 'archivos del storage...');
-                await deleteMultipleFilesFromR2(archivos);
-            }
-
-            // 3. Eliminar archivos de comentarios
-            const { data: comentarios } = await supabaseClient
-                .from('comentarios')
-                .select('archivos')
-                .eq('bitacora_id', entryId);
-
-            if (comentarios) {
-                for (const comentario of comentarios) {
-                    const archivosComentario = comentario.archivos || [];
-                    await deleteMultipleFilesFromR2(archivosComentario);
-                }
-            }
-
-            // 4. Usar función RPC para eliminar de forma segura
-            console.log('🔄 Eliminando entrada con función RPC...');
-
-            const { error: rpcError } = await supabaseClient
-                .rpc('delete_bitacora_entry', { entry_id_param: entryId });
-
-            if (rpcError) {
-                console.error('❌ Error en RPC:', rpcError);
-
-                // Intentar método alternativo si RPC falla
-                console.log('🔄 Intentando método alternativo...');
-
-                await supabaseClient.from('notification_logs').delete().eq('entry_id', entryId);
-                await supabaseClient.from('comentarios').delete().eq('bitacora_id', entryId);
-                await supabaseClient.from('bitacora_read').delete().eq('bitacora_id', entryId);
-
-                const { error: deleteError } = await supabaseClient
+            if (isOnline && supabaseClient) {
+                // Obtener desde Supabase
+                const result = await supabaseClient
                     .from('bitacora')
-                    .delete()
-                    .eq('id', entryId);
+                    .select('*')
+                    .eq('id', entryId)
+                    .single();
+                entry = result.data;
+                fetchError = result.error;
+            } else {
+                // Obtener desde IndexedDB
+                entry = await dbManager.getEntryById(entryId);
+                fetchError = entry ? null : new Error('Entrada no encontrada offline');
+            }
 
-                if (deleteError) {
-                    console.error('❌ Error eliminando entrada:', deleteError);
-                    throw new Error('No se pudo eliminar: ' + deleteError.message);
+            if (fetchError || !entry) {
+                console.error('❌ Error obteniendo entrada:', fetchError);
+                throw new Error('No se pudo obtener la entrada: ' + (fetchError?.message || 'No encontrada offline'));
+            }
+
+            if (isOnline && supabaseClient) {
+                // 2. Eliminar archivos del storage si existen
+                const archivos = entry.archivos || entry.fotos || [];
+                if (archivos.length > 0) {
+                    console.log('🗂️ Eliminando', archivos.length, 'archivos del storage...');
+                    await deleteMultipleFilesFromR2(archivos);
                 }
+
+                // 3. Eliminar archivos de comentarios
+                const { data: comentarios } = await supabaseClient
+                    .from('comentarios')
+                    .select('archivos')
+                    .eq('bitacora_id', entryId);
+
+                if (comentarios) {
+                    for (const comentario of comentarios) {
+                        const archivosComentario = comentario.archivos || [];
+                        await deleteMultipleFilesFromR2(archivosComentario);
+                    }
+                }
+
+                // 4. Usar función RPC para eliminar de forma segura
+                console.log('🔄 Eliminando entrada con función RPC...');
+
+                const { error: rpcError } = await supabaseClient
+                    .rpc('delete_bitacora_entry', { entry_id_param: entryId });
+
+                if (rpcError) {
+                    console.error('❌ Error en RPC:', rpcError);
+
+                    // Intentar método alternativo si RPC falla
+                    console.log('🔄 Intentando método alternativo...');
+
+                    await supabaseClient.from('notification_logs').delete().eq('entry_id', entryId);
+                    await supabaseClient.from('comentarios').delete().eq('bitacora_id', entryId);
+                    await supabaseClient.from('bitacora_read').delete().eq('entry_id', entryId);
+                    await deleteEntryOnline(entryId);
+                }
+                // También eliminar de IndexedDB si existe
+                try {
+                    await dbManager.deleteEntry(entryId);
+                    console.log('✅ Entrada eliminada de IndexedDB');
+                } catch (dbError) {
+                    console.warn('⚠️ Error eliminando de IndexedDB:', dbError);
+                }
+            } else {
+                // Modo offline: eliminar de IndexedDB y agregar al queue
+                console.log('🔴 Modo offline - Eliminando entrada de IndexedDB');
+
+                await dbManager.deleteEntry(entryId);
+                await dbManager.addToQueue('delete_entry', { id: entryId });
+
+                console.log('✅ Entrada eliminada offline (se sincronizará cuando vuelva la conexión)');
             }
 
             console.log('✅ Entrada eliminada exitosamente');
@@ -2254,6 +2915,19 @@ async function deleteEntry(entryId) {
             showNotification('❌ Error: ' + error.message, 'error');
         }
     }
+}
+
+// Función auxiliar para obtener nombre del rol
+function getRoleDisplayName(role) {
+    const roles = {
+        'admin': 'Administrador',
+        'contratista': 'Contratista',
+        'interventoria': 'Interventoría',
+        'supervision': 'Supervisión',
+        'ordenador_gasto': 'Ordenador del Gasto',
+        'user': 'Usuario'
+    };
+    return roles[role] || 'Usuario';
 }
 
 // Verificar conexión y estructura de base de datos (optimizado)
@@ -2288,69 +2962,544 @@ async function checkDatabaseStructure() {
 // Verificar sesión
 async function checkAuth() {
     console.log('🔍 Iniciando checkAuth...');
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    console.log('🔍 Session obtenida:', !!session);
-    
-    if (session) {
-        console.log('🔍 Usuario encontrado:', session.user.email);
-        
-        // Asignar usuario básico primero
-        currentUser = session.user;
-        
-        // Obtener el perfil completo con el rol
-        const { data: profile } = await supabaseClient
-            .from('profiles')
-            .select('rol')
-            .eq('id', session.user.id)
-            .single();
-        
-        if (profile) {
-            currentUser.role = profile.rol; // Usar 'rol' de la tabla profiles
-            console.log('🔍 Rol del usuario:', currentUser.role);
-            console.log('🔍 ¿Es admin?:', currentUser.role === 'admin');
-        } else {
-            console.log('🔍 No se encontró perfil, asignando rol por defecto');
+
+    // NUEVA LÓGICA SIMPLE: SIEMPRE INTENTAR OFFLINE PRIMERO
+    const offlineSession = localStorage.getItem('bitacora_session');
+    if (offlineSession) {
+        try {
+            const sessionData = JSON.parse(offlineSession);
+            console.log('🔍 Sesión offline encontrada:', sessionData.user?.email);
+
+            currentUser = sessionData.user;
             currentUser.role = 'user';
-        }
-        
-        const displayName = currentUser.email || 'Sin email';
-        document.getElementById('userName').textContent = displayName;
-        document.getElementById('userRole').textContent = '(Cargando...)';
-        
-        // Ocultar botón de admin mientras carga, mostrar solo si es admin
-        const manageUsersBtn = document.getElementById('manageUsersBtn');
-        if (manageUsersBtn) {
-            if (currentUser.role === 'admin') {
-                manageUsersBtn.style.display = 'block';
-                console.log('✅ Botón Agregar Usuarios mostrado (admin)');
-            } else {
+
+            document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+            document.getElementById('userRole').textContent = '(Offline)';
+
+            const manageUsersBtn = document.getElementById('manageUsersBtn');
+            if (manageUsersBtn) {
                 manageUsersBtn.style.display = 'none';
-                console.log('✅ Botón Agregar Usuarios ocultado (no admin)');
+            }
+
+            showMain();
+            console.log('🔍 Cargando entradas offline...');
+            await loadBitacoraEntries(); // Esta ahora carga offline primero
+            return;
+        } catch (parseError) {
+            console.warn('Error cargando sesión offline:', parseError);
+        }
+    }
+
+    // Si no hay sesión offline, intentar online
+    if (supabaseClient) {
+        try {
+            console.log('🔍 Intentando sesión online...');
+            const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+            if (error) {
+                console.error('❌ Error obteniendo sesión online:', error);
+                showLogin();
+                return;
+            }
+
+            if (session) {
+                console.log('🔍 Sesión online encontrada:', session.user.email);
+                currentUser = session.user;
+
+                // Intentar obtener perfil
+                try {
+                    const { data: profile } = await supabaseClient
+                        .from('profiles')
+                        .select('rol, nombre')
+                        .eq('id', currentUser.id)
+                        .single();
+
+                    if (profile) {
+                        currentUser.role = profile.rol || 'user';
+                        if (profile.nombre) {
+                            currentUser.nombre = profile.nombre;
+                        }
+                    }
+                } catch (profileError) {
+                    console.warn('⚠️ Error obteniendo perfil:', profileError);
+                    currentUser.role = 'user';
+                }
+
+                document.getElementById('userName').textContent = currentUser.nombre || currentUser.email;
+                document.getElementById('userRole').textContent = getRoleDisplayName(currentUser.role);
+
+                // Guardar sesión offline para futuras cargas
+                localStorage.setItem('bitacora_session', JSON.stringify({ user: currentUser }));
+
+                const manageUsersBtn = document.getElementById('manageUsersBtn');
+                if (manageUsersBtn) {
+                    manageUsersBtn.style.display = currentUser.role === 'admin' ? 'inline-block' : 'none';
+                }
+
+                showMain();
+                await loadBitacoraEntries();
+                return;
+            }
+        } catch (onlineError) {
+            console.error('❌ Error en autenticación online:', onlineError);
+        }
+    }
+
+    // Si todo falla, mostrar login
+    console.log('🔍 No se pudo autenticar - mostrando login');
+    showLogin();
+
+    // Verificar disponibilidad de Supabase desde el inicio
+    if (!checkSupabaseAvailability()) {
+        console.log('🔍 Supabase no disponible - cargando modo offline directo');
+        const offlineSession = localStorage.getItem('bitacora_session');
+        if (offlineSession) {
+            try {
+                const sessionData = JSON.parse(offlineSession);
+                console.log('🔍 Sesión offline encontrada:', sessionData.user?.email);
+
+                currentUser = sessionData.user;
+                currentUser.role = 'user';
+
+                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+                document.getElementById('userRole').textContent = '(Offline)';
+
+                const manageUsersBtn = document.getElementById('manageUsersBtn');
+                if (manageUsersBtn) {
+                    manageUsersBtn.style.display = 'none';
+                }
+
+                showMain();
+                console.log('🔍 Cargando entradas offline...');
+                await loadOfflineEntries();
+                return;
+            } catch (parseError) {
+                console.warn('Error cargando sesión offline:', parseError);
             }
         }
-        
-        // Mostrar aplicación principal inmediatamente
-        showMain();
-        
-        // Verificar estructura de base de datos en paralelo
-        checkDatabaseStructure().then(dbOk => {
-            if (!dbOk) {
-                showNotification('❌ Error crítico en la base de datos. Contacta al administrador.', 'error');
+        console.log('🔍 No hay sesión offline - mostrando login');
+        showLogin();
+        return;
+    }
+
+    // Si ya se determinó que estamos offline en la inicialización, usar modo offline directo
+    if (!isOnline && offlineMode) {
+        console.log('🔍 Modo offline ya determinado - cargando sesión offline');
+        const offlineSession = localStorage.getItem('bitacora_session');
+        console.log('🔍 Sesión offline disponible:', !!offlineSession);
+
+        if (offlineSession) {
+            try {
+                const sessionData = JSON.parse(offlineSession);
+                console.log('🔍 Cargando sesión offline:', sessionData.user?.email);
+
+                currentUser = sessionData.user;
+                currentUser.role = 'user';
+
+                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+                document.getElementById('userRole').textContent = '(Offline)';
+
+                const manageUsersBtn = document.getElementById('manageUsersBtn');
+                if (manageUsersBtn) {
+                    manageUsersBtn.style.display = 'none';
+                }
+
+                showMain();
+                console.log('🔍 Cargando entradas offline...');
+                await loadOfflineEntries();
+                return;
+            } catch (parseError) {
+                console.warn('Error cargando sesión offline:', parseError);
             }
-        }).catch(err => console.warn('Error verificando estructura:', err));
-        
-        // Cargar todo en paralelo para mejor rendimiento
-        Promise.all([
-            getUserProfile().catch(err => console.warn('Error cargando perfil:', err)),
-            loadBitacoraEntries().catch(err => console.warn('Error cargando entradas:', err))
-        ]).then(() => {
-            // Inicializar notificaciones después de cargar todo
-            initializeRealtimeNotifications().catch(err => console.warn('Error inicializando notificaciones:', err));
-        });
-    } else {
+        }
+
+        console.log('🔍 No hay sesión offline - mostrando login');
+        showLogin();
+        return;
+    }
+
+    // Verificar conectividad real si no está determinado
+    const realOnline = await checkRealConnectivity();
+    console.log('🔍 Conectividad real en checkAuth:', realOnline);
+
+    // Si offline, ir directo a modo offline
+    if (!realOnline) {
+        console.log('🔍 SIN CONEXIÓN REAL - modo offline');
+        const offlineSession = localStorage.getItem('bitacora_session');
+        console.log('🔍 Sesión offline disponible:', !!offlineSession);
+
+        if (offlineSession) {
+            try {
+                const sessionData = JSON.parse(offlineSession);
+                console.log('🔍 Cargando sesión offline:', sessionData.user?.email);
+
+                currentUser = sessionData.user;
+                currentUser.role = 'user';
+
+                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+                document.getElementById('userRole').textContent = '(Offline)';
+
+                const manageUsersBtn = document.getElementById('manageUsersBtn');
+                if (manageUsersBtn) {
+                    manageUsersBtn.style.display = 'none';
+                }
+
+                showMain();
+                console.log('🔍 Cargando entradas offline...');
+                await loadOfflineEntries();
+                return;
+            } catch (parseError) {
+                console.warn('Error cargando sesión offline:', parseError);
+            }
+        }
+
+        console.log('🔍 No hay sesión offline - mostrando login');
+        showLogin();
+        return;
+    }
+
+    try {
+        // Si no hay conexión real, forzar modo offline
+        if (!realOnline) {
+            console.log('🔍 SIN CONEXIÓN REAL - forzando modo offline');
+            const offlineSession = localStorage.getItem('bitacora_session');
+            console.log('🔍 Sesión offline en localStorage:', !!offlineSession);
+
+            if (offlineSession) {
+                try {
+                    const sessionData = JSON.parse(offlineSession);
+                    console.log('🔍 Modo offline forzado: sesión encontrada');
+                    console.log('🔍 Usuario offline:', sessionData.user?.email);
+
+                    currentUser = sessionData.user;
+                    currentUser.role = 'user';
+
+                    document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+                    document.getElementById('userRole').textContent = '(Offline)';
+
+                    const manageUsersBtn = document.getElementById('manageUsersBtn');
+                    if (manageUsersBtn) {
+                        manageUsersBtn.style.display = 'none';
+                    }
+
+                    showMain();
+                    await loadOfflineEntries();
+                    return;
+                } catch (parseError) {
+                    console.warn('Error parseando sesión offline:', parseError);
+                }
+            } else {
+                console.log('🔍 No hay sesión offline guardada - mostrando login');
+                showLogin();
+                return;
+            }
+        }
+
+        // Hay conexión, intentar modo online normal
+        console.log('🔍 Conexión real detectada - intentando modo online');
+
+        // Verificar si Supabase está disponible
+        if (!supabaseClient) {
+            console.log('🔍 Supabase no disponible - activando modo offline forzado');
+            offlineMode = true;
+            document.body.classList.add('offline-mode');
+            const offlineSession = localStorage.getItem('bitacora_session');
+            if (offlineSession) {
+                try {
+                    const sessionData = JSON.parse(offlineSession);
+                    currentUser = sessionData.user;
+                    currentUser.role = 'user';
+                    document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+                    document.getElementById('userRole').textContent = '(Offline)';
+                    const manageUsersBtn = document.getElementById('manageUsersBtn');
+                    if (manageUsersBtn) {
+                        manageUsersBtn.style.display = 'none';
+                    }
+                    showMain();
+                    await loadOfflineEntries();
+                    return;
+                } catch (parseError) {
+                    console.warn('Error cargando sesión offline:', parseError);
+                }
+            }
+            showLogin();
+            return;
+        }
+
+        // Intentar obtener sesión de Supabase
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+        if (error) {
+            console.error('❌ Error obteniendo sesión:', error);
+            throw error;
+        }
+
+        if (session) {
+            console.log('🔍 Sesión online encontrada:', session.user.email);
+
+            currentUser = session.user;
+
+            // Intentar obtener perfil, con fallback
+            try {
+                const { data: profile } = await supabaseClient
+                    .from('profiles')
+                    .select('rol')
+                    .eq('id', session.user.id)
+                    .single();
+
+                currentUser.role = profile?.rol || 'user';
+            } catch (profileError) {
+                console.warn('⚠️ Error obteniendo perfil, usando rol por defecto:', profileError);
+                currentUser.role = 'user';
+            }
+
+            // Guardar sesión en localStorage para offline
+            localStorage.setItem('bitacora_session', JSON.stringify({
+                user: currentUser,
+                expires_at: session.expires_at
+            }));
+
+            document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+            document.getElementById('userRole').textContent = '(Online)';
+
+            // Mostrar/ocultar botón admin
+            const manageUsersBtn = document.getElementById('manageUsersBtn');
+            if (manageUsersBtn) {
+                manageUsersBtn.style.display = currentUser.role === 'admin' ? 'block' : 'none';
+            }
+
+            showMain();
+
+            // Cargar datos
+            await loadBitacoraEntries(1, false);
+
+        } else {
+            console.log('🔍 No hay sesión');
+            showLogin();
+        }
+
+    } catch (error) {
+        console.error('❌ Error en checkAuth:', error);
+
+        // Último intento: modo offline forzado
+        const offlineSession = localStorage.getItem('bitacora_session');
+        if (offlineSession) {
+            try {
+                const sessionData = JSON.parse(offlineSession);
+                console.log('🔍 Modo offline forzado por error');
+
+                currentUser = sessionData.user;
+                currentUser.role = 'user';
+
+                document.getElementById('userName').textContent = currentUser.email || 'Usuario';
+                document.getElementById('userRole').textContent = '(Offline)';
+
+                const manageUsersBtn = document.getElementById('manageUsersBtn');
+                if (manageUsersBtn) {
+                    manageUsersBtn.style.display = 'none';
+                }
+
+                showMain();
+                await loadOfflineEntries();
+                return;
+            } catch (parseError) {
+                console.warn('Error en modo offline forzado:', parseError);
+            }
+        }
+
         showLogin();
     }
 }
+
+// Función de diagnóstico para modo offline
+async function diagnoseOfflineMode() {
+    console.log('🔍 === DIAGNÓSTICO MODO OFFLINE ===');
+
+    console.log('📡 Estado de conexión:');
+    console.log('  - navigator.onLine:', navigator.onLine);
+    console.log('  - isOnline (variable):', isOnline);
+    console.log('  - offlineMode:', offlineMode);
+    console.log('  - body class contains offline-mode:', document.body.classList.contains('offline-mode'));
+
+    console.log('👤 Estado de usuario:');
+    console.log('  - currentUser existe:', !!currentUser);
+    if (currentUser) {
+        console.log('  - email:', currentUser.email);
+        console.log('  - role:', currentUser.role);
+    }
+
+    console.log('💾 Estado de IndexedDB:');
+    console.log('  - dbManager existe:', !!dbManager);
+    if (dbManager && dbManager.db) {
+        try {
+            const entries = await dbManager.getAllEntries();
+            console.log('  - entradas en IndexedDB:', entries.length);
+            if (entries.length > 0) {
+                console.log('  - muestra de entradas:', entries.slice(0, 2).map(e => ({id: e.id, titulo: e.titulo})));
+            }
+        } catch (error) {
+            console.log('  - error accediendo IndexedDB:', error.message);
+        }
+    }
+
+    console.log('🌐 Estado de localStorage:');
+    const session = localStorage.getItem('bitacora_session');
+    console.log('  - sesión guardada:', !!session);
+    if (session) {
+        try {
+            const sessionData = JSON.parse(session);
+            console.log('  - usuario en sesión:', sessionData.user?.email);
+        } catch (error) {
+            console.log('  - error parseando sesión:', error.message);
+        }
+    }
+
+    console.log('📊 Estado de datos:');
+    console.log('  - allEntries.length:', allEntries.length);
+    console.log('  - totalEntries:', totalEntries);
+
+    console.log('🔍 === FIN DIAGNÓSTICO ===');
+}
+
+// Función para forzar modo offline (para testing)
+async function forceOfflineMode() {
+    console.log('🔧 Forzando modo offline manualmente');
+
+    isOnline = false;
+    offlineMode = true;
+    document.body.classList.add('offline-mode');
+
+    showNotification('🔴 Modo offline forzado', 'warning', 2000);
+
+    try {
+        await loadOfflineEntries();
+    } catch (error) {
+        console.error('Error forzando offline:', error);
+        showNotification('❌ Error cargando offline', 'error', 3000);
+    }
+}
+
+// Función para probar conectividad manualmente
+async function testConnectivity() {
+    console.log('🧪 ========== PRUEBA MANUAL DE CONECTIVIDAD ==========');
+    const realOnline = await checkRealConnectivity();
+    const result = {
+        navigatorOnLine: navigator.onLine,
+        realOnline: realOnline,
+        isOnline: isOnline,
+        offlineMode: offlineMode,
+        bodyHasOfflineClass: document.body.classList.contains('offline-mode'),
+        timestamp: new Date().toISOString()
+    };
+
+    console.log('🧪 Resultado:', result);
+
+    // Forzar actualización del estado si es necesario
+    const shouldBeOnline = realOnline;
+    if (isOnline !== shouldBeOnline) {
+        console.log('🧪 Corrigiendo estado de conexión...');
+        isOnline = shouldBeOnline;
+        offlineMode = !shouldBeOnline;
+        document.body.classList.toggle('offline-mode', !shouldBeOnline);
+
+        if (shouldBeOnline) {
+            showNotification('🟢 Conexión detectada', 'success', 2000);
+            await syncOfflineQueue();
+            await loadBitacoraEntries(1, false);
+        } else {
+            showNotification('🔴 Sin conexión detectada', 'warning', 2000);
+            await loadOfflineEntries();
+        }
+    }
+
+    // Mostrar en pantalla también
+    showNotification(`Conectividad: Real=${realOnline}, Navigator=${navigator.onLine}, isOnline=${isOnline}`, 'info', 5000);
+
+    console.log('🧪 ========== PRUEBA COMPLETADA ==========');
+    return result;
+}
+
+// Función para verificar estado de IndexedDB
+async function checkIndexedDBStatus() {
+    console.log('💾 ========== VERIFICACIÓN INDEXEDDB ==========');
+
+    try {
+        if (!dbManager) {
+            console.log('❌ dbManager no existe');
+            return;
+        }
+
+        const entries = await dbManager.getAllEntries();
+        console.log(`📦 Total entradas en IndexedDB: ${entries.length}`);
+
+        if (entries.length > 0) {
+            console.log('📦 Lista de entradas:');
+            entries.forEach((entry, index) => {
+                console.log(`  ${index + 1}. ID: ${entry.id}`);
+                console.log(`     Título: ${entry.titulo}`);
+                console.log(`     Fecha: ${entry.fecha}`);
+                console.log(`     Folio: ${entry.folio}`);
+                console.log(`     Usuario: ${entry.user_id}`);
+                console.log(`     Offline: ${entry.isOffline}`);
+                console.log('     ---');
+            });
+        }
+
+        // Verificar queue de sincronización
+        const queue = await dbManager.getQueueItems();
+        console.log(`📋 Items en queue de sincronización: ${queue.length}`);
+
+        if (queue.length > 0) {
+            console.log('📋 Queue items:');
+            queue.forEach((item, index) => {
+                console.log(`  ${index + 1}. Acción: ${item.action}, ID: ${item.data?.id}`);
+            });
+        }
+
+        console.log('💾 ========== VERIFICACIÓN COMPLETADA ==========');
+
+        showNotification(`IndexedDB: ${entries.length} entradas, ${queue.length} en queue`, 'info', 3000);
+
+    } catch (error) {
+        console.error('❌ Error verificando IndexedDB:', error);
+        showNotification('❌ Error verificando base de datos', 'error', 3000);
+    }
+}
+
+// El check periódico ya está incluido arriba con checkRealConnectivity cada 3 segundos
+
+// Función para forzar modo online (para testing)
+async function forceOnlineMode() {
+    console.log('🔧 Forzando modo online manualmente');
+
+    isOnline = true;
+    offlineMode = false;
+    document.body.classList.remove('offline-mode');
+
+    showNotification('🟢 Modo online forzado', 'success', 2000);
+
+    try {
+        await loadBitacoraEntries(1, false);
+        await syncOfflineQueue();
+    } catch (error) {
+        console.error('Error forzando online:', error);
+        showNotification('❌ Error cargando online', 'error', 3000);
+    }
+}
+
+// Función para forzar verificación de conectividad
+async function forceConnectivityCheck() {
+    console.log('🔧 Forzando verificación de conectividad...');
+    await testConnectivity();
+}
+
+// Hacer funciones globales para debugging
+window.diagnoseOfflineMode = diagnoseOfflineMode;
+window.forceOfflineMode = forceOfflineMode;
+window.forceOnlineMode = forceOnlineMode;
+window.testConnectivity = testConnectivity;
+window.checkIndexedDBStatus = checkIndexedDBStatus;
+window.forceConnectivityCheck = forceConnectivityCheck;
 
 // Función para obtener nombre amigable del rol
 function getRoleDisplayName(role) {
@@ -3179,7 +4328,7 @@ function updateNotificationBadge() {
 
 // Limpiar notificaciones en tiempo real
 function cleanupRealtimeNotifications() {
-    if (notificationSubscription) {
+    if (notificationSubscription && supabaseClient) {
         supabaseClient.removeChannel(notificationSubscription);
         notificationSubscription = null;
         console.log('🔌 Sistema de notificaciones desactivado');
@@ -3284,36 +4433,60 @@ async function generarFolioConsecutivo(resetear = false) {
             // console.log('🔄 Reiniciando foliado desde 0001');
             return '0001';
         }
-        
-        // Obtener el último folio registrado
-        const { data, error } = await supabaseClient
-            .from('bitacora')
-            .select('folio')
-            .not('folio', 'is', null)
-            .order('folio', { ascending: false })
-            .limit(1)
-            .single();
-        
-        if (error && error.code !== 'PGRST116') { // PGRST116 es "no rows returned"
-            console.error('Error al obtener último folio:', error);
-            return '0001'; // Fallback al primer folio
+
+        const currentlyOnline = navigator.onLine;
+
+        if (currentlyOnline) {
+            try {
+                // Obtener el último folio registrado desde Supabase
+                const { data, error } = await supabaseClient
+                    .from('bitacora')
+                    .select('folio')
+                    .not('folio', 'is', null)
+                    .order('folio', { ascending: false })
+                    .limit(1)
+                    .single();
+
+                if (!error && data && data.folio) {
+                    // Convertir folio a número, incrementar y formatear
+                    const ultimoNumero = parseInt(data.folio) + 1;
+                    const nuevoFolio = String(ultimoNumero).padStart(4, '0');
+                    console.log('🔢 Nuevo folio generado (online):', nuevoFolio);
+                    return nuevoFolio;
+                }
+            } catch (onlineError) {
+                console.warn('⚠️ Error obteniendo folio online, intentando offline:', onlineError);
+            }
         }
-        
-        let nuevoFolio;
-        if (data && data.folio) {
-            // Convertir folio a número, incrementar y formatear
-            const ultimoNumero = parseInt(data.folio) + 1;
-            nuevoFolio = String(ultimoNumero).padStart(4, '0');
-        } else {
-            // Si no hay folios previos, empezar desde 0001
-            nuevoFolio = '0001';
+
+        // Offline o fallback: buscar en IndexedDB
+        try {
+            const allEntries = await dbManager.getAllEntries();
+            const folios = allEntries
+                .map(entry => entry.folio)
+                .filter(folio => folio && !isNaN(parseInt(folio)))
+                .map(folio => parseInt(folio))
+                .sort((a, b) => b - a);
+
+            if (folios.length > 0) {
+                const ultimoNumero = folios[0] + 1;
+                const nuevoFolio = String(ultimoNumero).padStart(4, '0');
+                console.log('🔢 Nuevo folio generado (offline):', nuevoFolio);
+                return nuevoFolio;
+            }
+        } catch (dbError) {
+            console.warn('⚠️ Error obteniendo folio de IndexedDB:', dbError);
         }
-        
-        // console.log('🔢 Nuevo folio generado:', nuevoFolio);
+
+        // Último fallback
+        const nuevoFolio = String(Date.now()).slice(-4); // Usar últimos 4 dígitos del timestamp
+        console.log('🔢 Nuevo folio generado (fallback):', nuevoFolio);
         return nuevoFolio;
+
     } catch (error) {
         console.error('Error en generarFolioConsecutivo:', error);
-        return '0001'; // Fallback
+        // Último fallback absoluto
+        return String(Date.now()).slice(-4);
     }
 }
 
@@ -3493,7 +4666,7 @@ function closeCommentsModal() {
     modal.style.display = 'none';
     
     // Limpiar suscripción
-    if (commentsSubscription) {
+    if (commentsSubscription && supabaseClient) {
         supabaseClient.removeChannel(commentsSubscription);
         commentsSubscription = null;
     }
@@ -3974,14 +5147,19 @@ async function uploadCommentFiles(files, commentId) {
 
 // Enviar nuevo comentario con archivos
 async function submitComment() {
+    if (!supabaseClient) {
+        showNotification('❌ Comentarios no disponibles en modo offline', 'error');
+        return;
+    }
+
     const commentText = document.getElementById('newComment').value.trim();
-    
+
     console.log('🔍 Enviando comentario:', commentText);
     console.log('🔍 Bitácora ID:', currentBitacoraId);
     console.log('🔍 Usuario ID:', currentUser.id);
     console.log('🔍 Archivos:', commentFiles);
     console.log('🔍 Textarea encontrado:', !!document.getElementById('newComment'));
-    
+
     if (!commentText) {
         showNotification('❌ Por favor escribe un comentario', 'error');
         return;
@@ -4191,6 +5369,11 @@ function replyToComment(commentId, encodedAuthorName) {
 
 // Enviar respuesta
 async function submitReply(parentCommentId) {
+    if (!supabaseClient) {
+        showNotification('❌ Respuestas no disponibles en modo offline', 'error');
+        return;
+    }
+
     const replyTextarea = document.getElementById(`reply-textarea-${parentCommentId}`);
     const replyText = replyTextarea.value.trim();
     const filesInput = document.getElementById(`reply-files-${parentCommentId}`);
@@ -4442,10 +5625,15 @@ async function deleteComment(commentId) {
 
 // Suscribirse a cambios en tiempo real de comentarios
 function subscribeToComments(bitacoraId) {
+    if (!supabaseClient) {
+        console.log('⚠️ Supabase no disponible - comentarios en tiempo real desactivados');
+        return;
+    }
+
     if (commentsSubscription) {
         supabaseClient.removeChannel(commentsSubscription);
     }
-    
+
     commentsSubscription = supabaseClient
         .channel(`comentarios_${bitacoraId}`)
         .on('postgres_changes',
@@ -5572,6 +6760,8 @@ function openInvitationModal() {
     console.log('👥 Abriendo modal de invitaciones');
     document.getElementById('invitationModal').style.display = 'flex';
     loadInvitationCodes();
+    // Asegurar que el formulario esté inicializado
+    initializeGenerateCodeForm();
 }
 
 function closeInvitationModal() {
@@ -5636,11 +6826,13 @@ async function loadInvitationCodes() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+// Función para inicializar el formulario de códigos de invitación
+function initializeGenerateCodeForm() {
     console.log('🎫 Agregando event listener al formulario generateCodeForm');
     const generateCodeForm = document.getElementById('generateCodeForm');
     console.log('🎫 Elemento generateCodeForm encontrado:', !!generateCodeForm);
-    if (generateCodeForm) {
+    if (generateCodeForm && !generateCodeForm.dataset.listenerAdded) {
+        generateCodeForm.dataset.listenerAdded = 'true';
         generateCodeForm.addEventListener('submit', async function(e) {
     console.log('🎫 Formulario de generación de código enviado');
 
@@ -5740,7 +6932,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
         });
     }
-});
+}
+
+// Inicializar inmediatamente si el DOM ya está listo, o esperar si no
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeGenerateCodeForm);
+} else {
+    initializeGenerateCodeForm();
+}
 
 async function deleteInvitationCode(codeId) {
     if (!confirm('¿Estás seguro de eliminar este código?')) return;
@@ -5800,9 +6999,14 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
+    if (!supabaseClient) {
+        showNotification('❌ Registro no disponible en modo offline', 'error');
+        return;
+    }
+
     try {
         showNotification('📝 Registrando usuario...', 'info');
-        
+
         const { data: authData, error: authError } = await supabaseClient.auth.signUp({
             email: email,
             password: password
@@ -5869,4 +7073,5 @@ checkAuth().then(() => {
 }).catch(error => {
     console.error('❌ Error en checkAuth:', error);
     console.error('Stack trace:', error.stack);
+    showNotification('❌ Error al iniciar sesión', 'error');
 });

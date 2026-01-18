@@ -1610,6 +1610,8 @@ async function handleBitacoraSubmit(e) {
             console.error('Error guardando:', error);
             alert('Error al guardar: ' + error.message);
         } else {
+            console.log('📧 ========== LLEGANDO A LA SECCIÓN DE EMAILS ==========');
+
             // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas online)
             console.log('📧 ========== VERIFICANDO CONDICIONES PARA EMAILS ==========');
             console.log('📧 editId:', editId, 'typeof editId:', typeof editId);
@@ -1645,6 +1647,8 @@ async function handleBitacoraSubmit(e) {
                 if (!data?.[0]) console.log('  - data[0] no existe');
                 if (!isOnline) console.log('  - No está online');
             }
+
+            console.log('📧 ========== FIN DE LA SECCIÓN DE EMAILS ==========');
 
             // Notificar a otros usuarios (el realtime se encargará automáticamente)
             const successMsg = isOnline ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)';

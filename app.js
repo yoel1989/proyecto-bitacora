@@ -3169,7 +3169,7 @@ async function checkDatabaseStructure() {
 
 // Verificar sesión
 async function checkAuth() {
-    console.log('🔍 Iniciando checkAuth...');
+    console.log('🔍 ========== INICIANDO checkAuth ==========');
 
     // Obtener sesión offline guardada (para usar como fallback)
     const offlineSession = localStorage.getItem('bitacora_session');
@@ -3179,12 +3179,15 @@ async function checkAuth() {
         try {
             savedSessionData = JSON.parse(offlineSession);
             console.log('🔍 Sesión guardada encontrada:', savedSessionData.user?.email);
+            console.log('🔍 Rol guardado:', savedSessionData.user?.role);
         } catch (parseError) {
             console.warn('Error parseando sesión guardada:', parseError);
         }
     }
 
-    // PASO 1: Verificar si Supabase está disponible y hay conexión
+    // PASO 1: SIEMPRE intentar autenticación online primero
+    console.log('🔍 Supabase client disponible:', !!supabaseClient);
+
     if (supabaseClient) {
         try {
             console.log('🔍 Intentando autenticación online...');
@@ -3195,13 +3198,19 @@ async function checkAuth() {
                 setTimeout(() => reject(new Error('Timeout')), 5000)
             );
 
-            const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
+            const result = await Promise.race([sessionPromise, timeoutPromise]);
+            console.log('🔍 Resultado getSession:', result);
+
+            const { data: { session }, error } = result;
+            console.log('🔍 Session:', session ? 'Existe' : 'No existe');
+            console.log('🔍 Error:', error);
 
             if (!error && session) {
-                console.log('🔍 Sesión online encontrada:', session.user.email);
+                console.log('🔍 ✅ Sesión online VÁLIDA encontrada:', session.user.email);
                 currentUser = session.user;
                 isOnline = true;
                 offlineMode = false;
+                document.body.classList.remove('offline-mode');
 
                 // Obtener perfil con rol
                 try {
@@ -3260,19 +3269,24 @@ async function checkAuth() {
 
     // PASO 2: Si no hay sesión online, usar sesión guardada (modo offline)
     if (savedSessionData && savedSessionData.user) {
-        console.log('🔍 Usando sesión guardada en modo offline');
+        console.log('🔍 ⚠️ Usando sesión guardada en modo offline');
+        console.log('🔍 Datos guardados:', JSON.stringify(savedSessionData.user, null, 2));
 
         currentUser = savedSessionData.user;
         // Usar el rol guardado, no sobrescribir con 'user'
-        currentUser.role = savedSessionData.user.role || 'user';
+        const savedRole = savedSessionData.user.role || savedSessionData.user.rol || 'user';
+        currentUser.role = savedRole;
+        console.log('🔍 Rol a usar:', savedRole);
+
         isOnline = false;
         offlineMode = true;
 
-        const displayName = currentUser.nombre || currentUser.email || 'Usuario';
+        const displayName = currentUser.nombre || currentUser.name || currentUser.email || 'Usuario';
         document.getElementById('userName').textContent = displayName;
 
         // Mostrar rol guardado con indicador offline
         const roleDisplay = getRoleDisplayName(currentUser.role);
+        console.log('🔍 Role display:', roleDisplay);
         document.getElementById('userRole').textContent = '(' + roleDisplay + ' - Offline)';
 
         const manageUsersBtn = document.getElementById('manageUsersBtn');

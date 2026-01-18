@@ -1,14 +1,11 @@
 // email-service.js
 const nodemailer = require('nodemailer');
 
-// Configurar transporter con Gmail
-const transporter = nodemailer.createTransporter({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER || 'tu-email@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD || 'tu-contraseña-de-aplicacion'
-  }
-});
+// Importar Resend para envío de emails
+const { createClient } = require('@supabase/supabase-js');
+const { Resend } = require('resend');
+
+const resend = new Resend(process.env.RESEND_API_KEY || 'tu-api-key-de-resend');
 
 // Verificar conexión
 transporter.verify((error, success) => {
@@ -23,7 +20,6 @@ transporter.verify((error, success) => {
 async function notificarATodosUsuarios(entrada) {
   try {
     // Obtener todos los usuarios de Supabase
-    const { createClient } = require('@supabase/supabase-js');
     const supabase = createClient(
       process.env.SUPABASE_URL || 'https://mqxguprzpypcyyusvfrf.supabase.co',
       process.env.SUPABASE_ANON_KEY || 'tu-anon-key'
@@ -38,20 +34,24 @@ async function notificarATodosUsuarios(entrada) {
 
     console.log(`📧 Enviando notificación a ${usuarios.length} usuarios...`);
 
-    // Enviar email a cada usuario
-    const promesas = usuarios.map(usuario =>
-      enviarEmailIndividual(usuario, entrada)
-    );
+    // Crear lista de destinatarios
+    const destinatarios = usuarios.map(u => u.email);
 
-    const resultados = await Promise.allSettled(promesas);
+    // Enviar email masivo con Resend
+    const { data, error: sendError } = await resend.emails.send({
+      from: 'Bitácora de Obra <onboarding@resend.dev>',
+      to: destinatarios,
+      subject: `🔔 Nueva entrada: ${entrada.titulo}`,
+      html: generarContenidoEmailMasivo(usuarios, entrada)
+    });
 
-    // Contar éxitos y errores
-    const exitos = resultados.filter(r => r.status === 'fulfilled').length;
-    const errores = resultados.filter(r => r.status === 'rejected').length;
+    if (sendError) {
+      console.error('❌ Error enviando con Resend:', sendError);
+      throw sendError;
+    }
 
-    console.log(`✅ Emails enviados: ${exitos} | ❌ Errores: ${errores}`);
-
-    return { exitos, errores };
+    console.log(`✅ Email masivo enviado a ${destinatarios.length} usuarios`);
+    return { exitos: destinatarios.length, errores: 0 };
 
   } catch (error) {
     console.error('❌ Error en notificación masiva:', error);
@@ -72,51 +72,55 @@ async function enviarEmailIndividual(usuario, entrada) {
   }
 }
 
-// Generar contenido del email
-function generarContenidoEmail(usuario, entrada) {
-  return {
-    to: usuario.email,
-    from: `Bitácora Obra <tu-email@gmail.com>`,
-    subject: `🔔 Nueva entrada: ${entrada.titulo}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
-          <h1 style="margin: 0; text-align: center;">🏗️ Bitácora de Obra</h1>
+// Generar contenido del email masivo
+function generarContenidoEmailMasivo(usuarios, entrada) {
+  // Tomar el primer usuario para personalización (o usar genérico)
+  const usuarioEjemplo = usuarios[0] || { nombre: 'Usuario' };
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px 10px 0 0; text-align: center;">
+          <h1 style="color: white; margin: 0; font-size: 24px;">🔔 Nueva Entrada en Bitácora</h1>
         </div>
-        
-        <div style="background: white; padding: 30px; border: 1px solid #e0e0e0; border-radius: 0 0 10px 10px;">
-          <h2 style="color: #2c3e50; margin-bottom: 20px;">Nueva Entrada Registrada</h2>
-          
-          <p style="color: #666; margin-bottom: 10px;">
-            <strong>Estimado/a ${usuario.nombre || 'Usuario'},</strong>
+
+        <div style="background: #f8f9fa; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0;">
+
+          <p style="font-size: 16px; margin-bottom: 20px;">
+            Se ha registrado una nueva entrada en la bitácora de obra:
           </p>
-          
-          <p style="color: #666; margin-bottom: 20px;">
-            Se ha registrado una nueva entrada en la bitácora:
-          </p>
-          
-          <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+
+          <div style="background: white; padding: 20px; border-left: 4px solid #667eea; margin: 20px 0; border-radius: 5px;">
             <p style="margin: 5px 0;"><strong>📅 Fecha:</strong> ${new Date(entrada.fecha).toLocaleString('es-ES')}</p>
             <p style="margin: 5px 0;"><strong>📝 Título:</strong> ${entrada.titulo}</p>
             <p style="margin: 5px 0;"><strong>📍 Ubicación:</strong> ${entrada.ubicacion}</p>
-            <p style="margin: 5px 0;"><strong>📋 Tipo:</strong> ${entrada.tipoNota}</p>
-            <p style="margin: 5px 0;"><strong>⚡ Estado:</strong> ${entrada.estado}</p>
+            <p style="margin: 5px 0;"><strong>📋 Tipo:</strong> ${entrada.tipo_nota || entrada.tipoNota}</p>
+            <p style="margin: 5px 0;"><strong>🏷️ Folio:</strong> ${entrada.folio}</p>
             ${entrada.descripcion ? `<p style="margin: 10px 0;"><strong>📄 Descripción:</strong><br>${entrada.descripcion}</p>` : ''}
           </div>
-          
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="http://localhost:3000" style="background: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; display: inline-block;">
-              Ver en Bitácora
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${process.env.FRONTEND_URL || 'https://tu-dominio.com'}" style="background: #27ae60; color: white; padding: 12px 30px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: bold;">
+              📋 Ver en Bitácora
             </a>
           </div>
-          
-          <p style="color: #999; font-size: 12px; text-align: center; margin-top: 30px;">
-            Este es un email automático. No responder.
+
+          <p style="color: #666; font-size: 14px; text-align: center; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px;">
+            🏗️ <strong>Bitácora de Obra</strong><br>
+            Sistema de gestión de proyectos de construcción<br>
+            <em>Este es un email automático enviado a ${usuarios.length} usuarios registrados.</em>
           </p>
         </div>
-      </div>
-    `
-  };
+
+    </body>
+    </html>
+  `;
 }
 
 // Endpoint para recibir notificaciones desde el frontend
@@ -134,18 +138,44 @@ async function enviarNotificacionDesdeFrontend(entrada) {
 // Función de prueba
 async function probarEmail() {
   try {
-    const usuarioPrueba = { email: process.env.GMAIL_USER || 'tu-email@gmail.com', nombre: 'Usuario Prueba' };
     const entradaPrueba = {
-      titulo: 'Entrada de Prueba',
-      descripcion: 'Esta es una entrada de prueba para verificar el sistema de notificaciones',
-      ubicacion: 'Sitio de Prueba',
+      titulo: 'Entrada de Prueba - Sistema de Notificaciones',
+      descripcion: 'Esta es una entrada de prueba para verificar que el sistema de notificaciones por email funciona correctamente.',
+      ubicacion: 'Troncal Calle 26',
       tipo_nota: 'avance',
-      estado: 'pendiente',
+      estado: 'activo',
       fecha: new Date().toISOString(),
       folio: 'TEST-001'
     };
 
-    await enviarEmailIndividual(usuarioPrueba, entradaPrueba);
+    // Obtener usuarios de prueba (los primeros 2 usuarios activos)
+    const supabase = createClient(
+      process.env.SUPABASE_URL || 'https://mqxguprzpypcyyusvfrf.supabase.co',
+      process.env.SUPABASE_ANON_KEY || 'tu-anon-key'
+    );
+
+    const { data: usuarios, error } = await supabase
+      .from('usuarios')
+      .select('email, nombre')
+      .eq('activo', true)
+      .limit(2);
+
+    if (error || !usuarios || usuarios.length === 0) {
+      console.log('⚠️ No hay usuarios activos para probar. Usando email de prueba.');
+      // Enviar a un email de prueba si no hay usuarios
+      const { data, error: sendError } = await resend.emails.send({
+        from: 'Bitácora de Obra <onboarding@resend.dev>',
+        to: [process.env.TEST_EMAIL || 'test@example.com'],
+        subject: `🧪 PRUEBA - ${entradaPrueba.titulo}`,
+        html: generarContenidoEmailMasivo([{ nombre: 'Usuario de Prueba' }], entradaPrueba)
+      });
+
+      if (sendError) throw sendError;
+    } else {
+      // Enviar a usuarios reales
+      await notificarATodosUsuarios(entradaPrueba);
+    }
+
     console.log('🎉 Email de prueba enviado exitosamente');
   } catch (error) {
     console.error('❌ Error en prueba:', error);

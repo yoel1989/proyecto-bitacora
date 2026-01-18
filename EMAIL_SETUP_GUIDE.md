@@ -1,26 +1,43 @@
-# Guía de configuración de notificaciones por email
+# Guía de configuración de notificaciones por email con Resend
 
-## 1. Configurar Gmail App Password
+## 1. Configurar cuenta en Resend
 
-### Paso 1: Activar verificación en 2 pasos
-1. Ve a [Google Account Settings](https://myaccount.google.com/security)
-2. En "Inicio de sesión y recuperación", activa "Verificación en 2 pasos"
+### Paso 1: Crear cuenta
+1. Ve a [resend.com](https://resend.com)
+2. Regístrate con tu email (puedes usar Gmail, Outlook, etc.)
+3. Verifica tu email desde el correo que te envíen
 
-### Paso 2: Generar App Password
-1. En la misma página, busca "Contraseñas de aplicaciones"
-2. Selecciona "Correo" y "Otro (nombre personalizado)"
-3. Ingresa "Bitácora de Obra" como nombre
-4. Copia la contraseña generada (16 caracteres, sin espacios)
+### Paso 2: Obtener API Key
+1. En el dashboard, ve a **"API Keys"** (menú lateral izquierdo)
+2. Haz clic en **"Create API Key"**
+3. Nombre: **"Bitácora de Obra"**
+4. Copia la **API Key** (empieza con `re_`)
+
+### Paso 3: Verificar dominio (Opcional pero recomendado)
+1. Ve a **"Domains"** en el menú
+2. Agrega tu dominio (ej: `tudominio.com`)
+3. Sigue las instrucciones para verificar (DNS records)
+4. Una vez verificado, podrás enviar desde `notificaciones@tudominio.com`
 
 ## 2. Configurar variables de entorno
 
 Crea un archivo `.env` en el directorio del backend:
 
 ```env
-GMAIL_USER=tu-email@gmail.com
-GMAIL_APP_PASSWORD=tu-app-password-generada
+# API Key de Resend (requerida)
+RESEND_API_KEY=re_tu_api_key_aqui
+
+# Variables de Supabase (requeridas)
 SUPABASE_URL=https://mqxguprzpypcyyusvfrf.supabase.co
-SUPABASE_ANON_KEY=tu-supabase-anon-key
+SUPABASE_ANON_KEY=tu_supabase_anon_key
+
+# URL de tu aplicación frontend (requerida)
+FRONTEND_URL=https://tu-dominio.com
+
+# Email para pruebas (opcional)
+TEST_EMAIL=tu-email@gmail.com
+
+# Puerto (opcional, default: 3001)
 PORT=3001
 ```
 

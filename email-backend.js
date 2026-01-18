@@ -2,8 +2,8 @@ const express = require('express');
 const cors = require('cors');
 const { Resend } = require('resend');
 
-// Inicializar Resend (deberás obtener tu API key)
-const resend = new Resend('re_bKJkXN7K_MqTjYz8Gt1eiJjW7HBm2GY4n');
+// Inicializar Resend
+const resend = new Resend(process.env.RESEND_API_KEY || 'tu-api-key-de-resend');
 
 const app = express();
 const PORT = 3001;

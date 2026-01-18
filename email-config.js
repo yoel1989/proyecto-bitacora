@@ -1,29 +1,37 @@
-// Archivo de configuración para el backend de email
+// Archivo de configuración para el backend de email con Resend
 // Crear archivo .env en el directorio del backend
 
 /*
-# Variables de entorno para email-service.js
-GMAIL_USER=tu-email@gmail.com
-GMAIL_APP_PASSWORD=tu-app-password-de-gmail
+# Variables de entorno para el backend de email
+
+# API Key de Resend (obténla de https://resend.com)
+RESEND_API_KEY=re_tu_api_key_de_resend
 
 # Variables de Supabase
 SUPABASE_URL=https://mqxguprzpypcyyusvfrf.supabase.co
-SUPABASE_ANON_KEY=tu-anon-key
+SUPABASE_ANON_KEY=tu-supabase-anon-key
+
+# URL del frontend (para el enlace en los emails)
+FRONTEND_URL=https://tu-dominio.com
+
+# Email de prueba (opcional)
+TEST_EMAIL=tu-email@gmail.com
 
 # Puerto del servidor
 PORT=3001
 */
 
-// Para obtener App Password de Gmail:
-// 1. Ve a https://myaccount.google.com/security
-// 2. Activa la verificación en 2 pasos
-// 3. Ve a "Contraseñas de aplicaciones"
-// 4. Genera una nueva contraseña para "Bitácora de Obra"
-// 5. Usa esa contraseña (sin espacios) en GMAIL_APP_PASSWORD
+// Para obtener API Key de Resend:
+// 1. Ve a https://resend.com
+// 2. Regístrate con tu email
+// 3. Ve a "API Keys" en el dashboard
+// 4. Crea una nueva API Key
+// 5. Copia la key que empieza con "re_"
 
 // Para desplegar el backend:
-// 1. Sube email-service.js y email-backend.js a un hosting como Railway, Render o Heroku
-// 2. Configura las variables de entorno
-// 3. Actualiza la URL en app.js: 'https://tu-backend-url.com/api/send-entry-notification'
+// 1. Railway (recomendado): railway.app
+// 2. Render: render.com
+// 3. Heroku: heroku.com
+// 4. Configura las variables de entorno en el servicio elegido
 
 module.exports = {};

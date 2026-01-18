@@ -1611,7 +1611,11 @@ async function handleBitacoraSubmit(e) {
             alert('Error al guardar: ' + error.message);
         } else {
             // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas online)
+            console.log('📧 Verificando condiciones para envío de emails:');
+            console.log('📧 editId:', editId, 'data:', !!data, 'data[0]:', !!data?.[0], 'isOnline:', isOnline);
+
             if (!editId && data && data[0] && isOnline) {
+                console.log('📧 Condiciones cumplidas - enviando notificaciones...');
                 try {
                     await enviarNotificacionesEmailATodos(data[0]);
                     console.log('📧 Notificaciones por email enviadas');
@@ -1619,6 +1623,8 @@ async function handleBitacoraSubmit(e) {
                     console.error('❌ Error enviando emails:', emailError);
                     // No fallar el guardado si hay error en emails
                 }
+            } else {
+                console.log('📧 Condiciones NO cumplidas - no se envían emails');
             }
 
             // Notificar a otros usuarios (el realtime se encargará automáticamente)

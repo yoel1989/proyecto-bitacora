@@ -1611,20 +1611,39 @@ async function handleBitacoraSubmit(e) {
             alert('Error al guardar: ' + error.message);
         } else {
             // Enviar notificaciones por email a todos los usuarios (solo para nuevas entradas online)
-            console.log('📧 Verificando condiciones para envío de emails:');
-            console.log('📧 editId:', editId, 'data:', !!data, 'data[0]:', !!data?.[0], 'isOnline:', isOnline);
+            console.log('📧 ========== VERIFICANDO CONDICIONES PARA EMAILS ==========');
+            console.log('📧 editId:', editId, 'typeof editId:', typeof editId);
+            console.log('📧 data:', data, 'data.length:', data?.length);
+            console.log('📧 data[0]:', data?.[0]);
+            console.log('📧 isOnline:', isOnline);
+            console.log('📧 navigator.onLine:', navigator.onLine);
+            console.log('📧 offlineMode:', offlineMode);
+
+            const condition1 = !editId;
+            const condition2 = data && data[0];
+            const condition3 = isOnline;
+
+            console.log('📧 Condición 1 (!editId):', condition1);
+            console.log('📧 Condición 2 (data && data[0]):', condition2);
+            console.log('📧 Condición 3 (isOnline):', condition3);
+            console.log('📧 TODAS las condiciones:', condition1 && condition2 && condition3);
 
             if (!editId && data && data[0] && isOnline) {
-                console.log('📧 Condiciones cumplidas - enviando notificaciones...');
+                console.log('📧 ✅ CONDICIONES CUMPLIDAS - ENVIANDO NOTIFICACIONES...');
                 try {
                     await enviarNotificacionesEmailATodos(data[0]);
-                    console.log('📧 Notificaciones por email enviadas');
+                    console.log('📧 ✅ Notificaciones por email enviadas exitosamente');
                 } catch (emailError) {
                     console.error('❌ Error enviando emails:', emailError);
                     // No fallar el guardado si hay error en emails
                 }
             } else {
-                console.log('📧 Condiciones NO cumplidas - no se envían emails');
+                console.log('📧 ❌ CONDICIONES NO CUMPLIDAS - NO SE ENVIAN EMAILS');
+                console.log('📧 Razón del fallo:');
+                if (editId) console.log('  - Es una edición (editId existe)');
+                if (!data) console.log('  - No hay datos');
+                if (!data?.[0]) console.log('  - data[0] no existe');
+                if (!isOnline) console.log('  - No está online');
             }
 
             // Notificar a otros usuarios (el realtime se encargará automáticamente)

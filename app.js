@@ -1496,17 +1496,37 @@ async function handleBitacoraSubmit(e) {
     // console.log('Archivos finales:', archivoUrls.length, 'archivos');
     
     let data, error;
-    
+
     if (editId) {
         // Actualizar entrada existente
-        const { data: updateData, error: updateError } = await supabaseClient
-            .from('bitacora')
-            .update(formData)
-            .eq('id', editId)
-            .select();
-        
-data = updateData;
-        error = updateError;
+        try {
+            const { data: updateData, error: updateError } = await supabaseClient
+                .from('bitacora')
+                .update(formData)
+                .eq('id', editId)
+                .select();
+
+            data = updateData;
+            error = updateError;
+
+            // Detectar errores de conexión
+            if (error && (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError'))) {
+                console.warn('⚠️ Error de conexión al actualizar, guardando localmente');
+                // Guardar cambios en IndexedDB para sincronizar después
+                await dbManager.saveEntry({ ...formData, id: editId });
+                await dbManager.addToQueue('update_entry', { ...formData, id: editId });
+                showNotification('📦 Cambios guardados offline (se sincronizarán cuando vuelva la conexión)', 'warning', 5000);
+                error = null;
+                data = [{ ...formData, id: editId }];
+            }
+        } catch (updateCatchError) {
+            console.warn('⚠️ Error de conexión al actualizar:', updateCatchError);
+            // Guardar cambios en IndexedDB para sincronizar después
+            await dbManager.saveEntry({ ...formData, id: editId });
+            await dbManager.addToQueue('update_entry', { ...formData, id: editId });
+            showNotification('📦 Cambios guardados offline (se sincronizarán cuando vuelva la conexión)', 'warning', 5000);
+            data = [{ ...formData, id: editId }];
+        }
     } else {
         // Crear nueva entrada
         let currentlyOnline = navigator.onLine;
@@ -1527,7 +1547,12 @@ data = updateData;
                 data = result.data;
                 error = result.error;
 
-                if (!error && data) {
+                // Detectar errores de conexión y hacer fallback a offline
+                if (error && (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError') || error.message?.includes('fetch'))) {
+                    console.warn('⚠️ Error de conexión detectado, cambiando a modo offline:', error.message);
+                    currentlyOnline = false;
+                    error = null; // Limpiar el error para que el modo offline funcione
+                } else if (!error && data) {
                     // Guardar en IndexedDB para soporte offline
                     await dbManager.saveEntry({
                         ...formData,

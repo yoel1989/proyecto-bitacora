@@ -7094,90 +7094,125 @@ function copyGeneratedCode() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('📝 Agregando event listener al formulario registerWithCodeForm');
-    const registerWithCodeForm = document.getElementById('registerWithCodeForm');
-    console.log('📝 Elemento registerWithCodeForm encontrado:', !!registerWithCodeForm);
-    if (registerWithCodeForm) {
-        registerWithCodeForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
 
-            const code = document.getElementById('registerInvitationCode').value.trim().toUpperCase();
-            const name = document.getElementById('registerName').value.trim();
-            const email = document.getElementById('registerEmail').value.trim();
-            const password = document.getElementById('registerPassword').value;
-            const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
+// Registrar immediately when app.js loads
+(function() {
+    console.log('📝 Iniciando registro de event listener para registerWithCodeForm');
+    
+    function attachRegisterEventListener() {
+        const registerWithCodeForm = document.getElementById('registerWithCodeForm');
+        console.log('📝 Elemento registerWithCodeForm encontrado:', !!registerWithCodeForm);
+        
+        if (registerWithCodeForm) {
+            console.log('📝 Agregando event listener al formulario registerWithCodeForm');
+            
+            // Remove any existing listeners to avoid duplicates
+            const newForm = registerWithCodeForm.cloneNode(true);
+            registerWithCodeForm.parentNode.replaceChild(newForm, registerWithCodeForm);
+            
+            newForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
 
-            if (password !== passwordConfirm) {
-                showNotification('❌ Las contraseñas no coinciden', 'error');
-                return;
-            }
+                const code = document.getElementById('registerInvitationCode').value.trim().toUpperCase();
+                const name = document.getElementById('registerName').value.trim();
+                const email = document.getElementById('registerEmail').value.trim();
+                const password = document.getElementById('registerPassword').value;
+                const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
 
-            if (password.length < 6) {
-                showNotification('❌ La contraseña debe tener al menos 6 caracteres', 'error');
-                return;
-            }
-
-            if (name.length < 2) {
-                showNotification('❌ El nombre debe tener al menos 2 caracteres', 'error');
-                return;
-            }
-
-            if (!supabaseClient) {
-                showNotification('❌ Registro no disponible en modo offline', 'error');
-                return;
-            }
-
-            try {
-                showNotification('📝 Registrando usuario...', 'info');
-
-                const { data: authData, error: authError } = await supabaseClient.auth.signUp({
-                    email: email,
-                    password: password
-                });
-
-                console.log('🔐 Respuesta de signUp:', { authData, authError });
-
-                if (authError) throw authError;
-
-                if (authData.user) {
-                    const { data: roleData, error: roleError } = await supabaseClient
-                        .rpc('redeem_invitation_code', {
-                            p_code: code,
-                            p_user_id: authData.user.id
-                        });
-
-                    if (roleError) {
-                        showNotification('❌ Error: ' + roleError.message, 'error');
-                        return;
-                    }
-
-                    const { error: updateError } = await supabaseClient
-                        .from('profiles')
-                        .update({ nombre: name })
-                        .eq('id', authData.user.id);
-
-                    if (updateError) {
-                        console.warn('⚠️ Error actualizando nombre:', updateError);
-                    }
-
-                    showNotification('✅ Registro exitoso. Ahora puedes iniciar sesión.', 'success');
-                    closeRegisterModal();
-                    document.getElementById('registerWithCodeForm').reset();
-
-                    setTimeout(() => {
-                        document.getElementById('email').value = email;
-                        document.getElementById('password').focus();
-                    }, 500);
+                if (password !== passwordConfirm) {
+                    showNotification('❌ Las contraseñas no coinciden', 'error');
+                    return;
                 }
 
-            } catch (error) {
-                console.error('Error registrando:', error);
-                showNotification('❌ Error al registrar: ' + error.message, 'error');
-            }
-        });
+                if (password.length < 6) {
+                    showNotification('❌ La contraseña debe tener al menos 6 caracteres', 'error');
+                    return;
+                }
+
+                if (name.length < 2) {
+                    showNotification('❌ El nombre debe tener al menos 2 caracteres', 'error');
+                    return;
+                }
+
+                if (!supabaseClient) {
+                    showNotification('❌ Registro no disponible en modo offline', 'error');
+                    return;
+                }
+
+                try {
+                    showNotification('📝 Registrando usuario...', 'info');
+
+                    const { data: authData, error: authError } = await supabaseClient.auth.signUp({
+                        email: email,
+                        password: password
+                    });
+
+                    console.log('🔐 Respuesta de signUp:', { authData, authError });
+
+                    if (authError) throw authError;
+
+                    if (authData.user) {
+                        const { data: roleData, error: roleError } = await supabaseClient
+                            .rpc('redeem_invitation_code', {
+                                p_code: code,
+                                p_user_id: authData.user.id
+                            });
+
+                        if (roleError) {
+                            showNotification('❌ Error: ' + roleError.message, 'error');
+                            return;
+                        }
+
+                        const { error: updateError } = await supabaseClient
+                            .from('profiles')
+                            .update({ nombre: name })
+                            .eq('id', authData.user.id);
+
+                        if (updateError) {
+                            console.warn('⚠️ Error actualizando nombre:', updateError);
+                        }
+
+                        showNotification('✅ Registro exitoso. Ahora puedes iniciar sesión.', 'success');
+                        closeRegisterModal();
+                        document.getElementById('registerWithCodeForm').reset();
+
+                        setTimeout(() => {
+                            document.getElementById('email').value = email;
+                            document.getElementById('password').focus();
+                        }, 500);
+                    }
+
+                } catch (error) {
+                    console.error('Error registrando:', error);
+                    showNotification('❌ Error al registrar: ' + error.message, 'error');
+                }
+            });
+            
+            console.log('✅ Event listener registrado exitosamente');
+            return true;
+        } else {
+            console.log('📝 Elemento registerWithCodeForm NO encontrado, esperando...');
+            return false;
+        }
     }
-});
+    
+    // Try immediately
+    if (!attachRegisterEventListener()) {
+        // If not found, wait for it with a timeout
+        let attempts = 0;
+        const maxAttempts = 50; // 5 seconds max
+        
+        const intervalId = setInterval(() => {
+            attempts++;
+            if (attachRegisterEventListener() || attempts >= maxAttempts) {
+                clearInterval(intervalId);
+                if (attempts >= maxAttempts) {
+                    console.warn('⚠️ No se encontró registerWithCodeForm después de 5 segundos');
+                }
+            }
+        }, 100);
+    }
+})();
 
 window.openInvitationModal = openInvitationModal;
 window.closeInvitationModal = closeInvitationModal;

@@ -40,7 +40,7 @@
                 console.log('✅ config.js cargado');
                 // Cargar app.js
                 const appScript = document.createElement('script');
-                appScript.src = 'app.js?v=20250116';
+                appScript.src = 'app.js?v=20260119a';
                 appScript.onload = () => console.log('✅ app.js cargado');
                 appScript.onerror = () => console.error('❌ Error cargando app.js');
                 document.head.appendChild(appScript);
@@ -347,7 +347,7 @@
                 <button class="close-register-modal" onclick="closeRegisterModal()">✕</button>
             </div>
             <div class="register-modal-body">
-                <form id="registerWithCodeForm" onsubmit="return false">
+                <form id="registerWithCodeForm">
                     <div class="form-group">
                         <label>Código de invitación: *</label>
                         <input type="text" id="registerInvitationCode" required placeholder="Ejemplo: ABC12345" maxlength="8" style="text-transform: uppercase;">

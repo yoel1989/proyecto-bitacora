@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <title>📋 Bitácora de Obra</title>
-    <link rel="stylesheet" href="styles.css?v=20260118c">
+    <title>📋 Bitácora de Obra Consorcio Titán</title>
+    <link rel="stylesheet" href="styles-new.css?v=1">
+    <link rel="stylesheet" href="styles.css?v=20260119a">
     <link rel="stylesheet" href="comments-buttons.css?v=20250117">
-    <link rel="stylesheet" href="comments-modal.css?v=20250117">
+    <link rel="stylesheet" href="comments-modal.css?v=20250118a">
     <script>
         // Función para cargar scripts externos con manejo de errores
         function loadExternalScript(src, name) {
@@ -29,7 +30,8 @@
         Promise.all([
             loadExternalScript('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', 'Supabase'),
             loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jsPDF'),
-            loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas')
+            loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas'),
+            loadExternalScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'JSZip')
         ]).then(() => {
             console.log('🔧 Scripts externos cargados');
 
@@ -62,7 +64,7 @@
         <!-- Login Screen -->
         <div id="loginScreen">
             <div class="login-container">
-                <h2>Bitácora de Obra</h2>
+                <h2>Bitácora de Obra Consorcio Titán</h2>
                 <form id="loginForm">
                     <input type="email" id="email" placeholder="Correo electrónico" required>
                     <input type="password" id="password" placeholder="Contraseña" required>
@@ -78,7 +80,7 @@
         <!-- Main App -->
         <div id="mainApp" style="display: none;">
             <header>
-                <h1>Bitácora de Obra</h1>
+                <h1>Bitácora de Obra Consorcio Titán</h1>
                 <div class="user-info">
                     <span id="userName"></span>
                     <span id="userRole"></span>
@@ -390,5 +392,31 @@
             </div>
         </div>
     </div>
+    <!-- Modal para ver descripción completa -->
+    <div id="descModal" class="photo-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; height: auto; min-height: 200px;">
+            <div class="modal-header">
+                <h3>📝 Descripción Completa</h3>
+                <button class="close-modal" onclick="closeDescModal()">✕</button>
+            </div>
+            <div id="fullDescContent" style="padding: 20px; line-height: 1.6; font-size: 1.1rem; white-space: pre-wrap; word-wrap: break-word; color: #333;"></div>
+        </div>
+    </div>
+    
+    <script>
+        function openDescModal(text) {
+            document.getElementById('fullDescContent').textContent = text;
+            document.getElementById('descModal').style.display = 'flex';
+        }
+        function closeDescModal() {
+            document.getElementById('descModal').style.display = 'none';
+        }
+        window.onclick = function(event) {
+            const modal = document.getElementById('descModal');
+            if (event.target == modal) {
+                closeDescModal();
+            }
+        }
+    </script>
 </body>
 </html>

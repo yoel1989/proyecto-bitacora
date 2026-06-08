@@ -1,0 +1,20 @@
+/* --- SISTEMA DE COLUMNAS UNIFICADO PARA BITÁCORA --- */
+.col-folio { width: 50px !important; min-width: 50px !important; text-align: center; font-weight: bold; border: 1px solid #ddd; }
+.col-fecha { width: 70px !important; min-width: 70px !important; border: 1px solid #ddd; }
+.col-titulo { width: 120px !important; min-width: 120px !important; border: 1px solid #ddd; }
+.col-desc { width: 350px !important; min-width: 350px !important; border: 1px solid #ddd; }
+.col-hini { width: 65px !important; min-width: 65px !important; text-align: center; border: 1px solid #ddd; }
+.col-hfin { width: 65px !important; min-width: 65px !important; text-align: center; border: 1px solid #ddd; }
+.col-tipo { width: 80px !important; min-width: 80px !important; border: 1px solid #ddd; }
+.col-ubic { width: 100px !important; min-width: 100px !important; border: 1px solid #ddd; }
+.col-user { width: 120px !important; min-width: 120px !important; border: 1px solid #ddd; }
+.col-adj { width: 130px !important; min-width: 130px !important; text-align: center; border: 1px solid #ddd; }
+.col-acc { width: 110px !important; min-width: 110px !important; text-align: center; border: 1px solid #ddd; }
+
+.excel-table {
+  table-layout: fixed !important;
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 0.8rem !important;
+}
+/* -------------------------------------------------- */

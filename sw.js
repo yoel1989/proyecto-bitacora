@@ -1,6 +1,6 @@
 // Service Worker para modo offline
-const CACHE_NAME = 'bitacora-cache-v1';
-const STATIC_CACHE = 'bitacora-static-v1';
+const CACHE_NAME = 'bitacora-cache-v2';
+const STATIC_CACHE = 'bitacora-static-v2';
 
 // Recursos a cachear (rutas relativas para compatibilidad)
 const STATIC_ASSETS = [

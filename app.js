@@ -1880,9 +1880,7 @@ async function loadBitacoraEntriesOnline(page = 1, append = false) {
     // Procesar datos online
     const processedEntries = bitacoraData.map(entry => ({
         ...entry,
-        profiles: {
-            email: entry.user_id || 'Usuario desconocido'
-        }
+        profiles: null // Se cargará correctamente en loadUserEmailsInBackground
     }));
 
     // Actualizar datos globales
@@ -1907,7 +1905,7 @@ async function loadBitacoraEntriesOnline(page = 1, append = false) {
     }
 
     // Actualizar UI
-    filterAndDisplayEntries();
+    await filterAndDisplayEntries(append, processedEntries);
 
     // Cargar emails en segundo plano
     if (bitacoraData.length > 0) {
@@ -1915,14 +1913,6 @@ async function loadBitacoraEntriesOnline(page = 1, append = false) {
             console.warn('Error cargando emails:', err);
         });
     }
-
-    // Actualizar paginación
-    const loadMoreBtn = document.getElementById('loadMoreBtn');
-    if (loadMoreBtn) {
-        loadMoreBtn.style.display = allEntries.length >= totalEntries ? 'none' : 'block';
-    }
-
-    console.log('✅ Online cargado exitosamente');
 }
 
 // Obtener email de usuario desde auth (función admin)
@@ -2006,13 +1996,12 @@ async function loadUserEmailsInBackground(entries) {
             
             // Actualizar la vista solo si hubo cambios en los emails
             if (updatedAny) {
-                // Actualizar el array global allEntries con los datos modificados
-                allEntries = entries;
                 console.log('🔄 Actualizando vista con emails correctos...');
                 
-                // Reconstruir índice de búsqueda
+                // Reconstruir índice de búsqueda con todas las entradas acumuladas
                 searchIndex = buildSearchIndex(allEntries);
-                // Solo actualizar los elementos existentes sin duplicar
+                
+                // Solo actualizar los elementos existentes en el DOM sin duplicar
                 updateExistingEntriesWithEmails(entries);
                 console.log('✅ Vista actualizada con emails correctos');
             } else {
@@ -2034,13 +2023,13 @@ function updateExistingEntriesWithEmails(entries) {
             const entryElements = document.querySelectorAll(`[data-entry-id="${entry.id}"]`);
             
             entryElements.forEach(element => {
-                const userCell = element.querySelector('td:nth-child(10)'); // Columna Usuario (10ª)
+                const userCell = element.querySelector('td:nth-child(9)'); // Columna Usuario (9ª)
                 if (userCell && entry.profiles?.email) {
                     userCell.textContent = entry.profiles.email;
                 }
                 
                 // También actualizar en cards móviles si existen
-                const mobileUserLabel = element.querySelector('.mobile-entry-row:last-child .mobile-entry-content');
+                const mobileUserLabel = element.querySelector('.mobile-author-email') || element.querySelector('.mobile-entry-row:last-child .mobile-entry-content');
                 if (mobileUserLabel && entry.profiles?.email) {
                     mobileUserLabel.textContent = entry.profiles.email;
                 }
@@ -2055,16 +2044,29 @@ function updateExistingEntriesWithEmails(entries) {
 let isFiltering = false;
 
 // Filtrar y mostrar entradas con debounce para mejor rendimiento
-async function filterAndDisplayEntries() {
-    if (isFiltering) {
+async function filterAndDisplayEntries(append = false, newEntries = null) {
+    if (isFiltering && !append) {
         console.log('⏳ Ya se está filtrando, omitiendo...');
         return;
     }
 
-    console.log('🔍 filterAndDisplayEntries iniciado');
-    console.log('🔍 allEntries:', allEntries.length, 'entradas');
+    console.log('🔍 filterAndDisplayEntries iniciado', { append, newEntriesCount: newEntries?.length });
 
     isFiltering = true;
+
+    // Si estamos añadiendo y tenemos las nuevas entradas, solo mostramos esas
+    if (append && newEntries) {
+        await displayEntries(newEntries, true);
+        isFiltering = false;
+        
+        // ACTUALIZACIÓN DE BOTÓN Y CONTADOR INCLUSO EN APPEND
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = allEntries.length >= totalEntries ? 'none' : 'block';
+        }
+        updatePaginationInfo();
+        return;
+    }
 
     let filteredEntries = [...allEntries];
 
@@ -2167,7 +2169,7 @@ async function filterAndDisplayEntries() {
     console.log('🔍 ubicacionFilter:', ubicacionFilter);
 
     // Usar await para asegurar que displayEntries se complete antes de continuar
-    await displayEntries(filteredEntries);
+    await displayEntries(append ? newEntries : filteredEntries, append);
 
     // Actualizar contadores
     updateEntriesCounter(filteredEntries);
@@ -2295,254 +2297,282 @@ let isRenderingEntries = false;
 
 // Mostrar entradas con renderizado optimizado
 async function displayEntries(entries, append = false) {
-    if (isRenderingEntries && append) {
-        console.log('⏳ Ya se están renderizando entradas, omitiendo...');
-        return;
-    }
-    
     const entriesList = document.getElementById('entriesList');
+    if (!entriesList) return;
     
-    if (!entriesList) {
-        console.error('❌ No se encontró el elemento entriesList');
-        return;
-    }
-    
+    // Si no es append, limpiar la lista
     if (!append) {
         entriesList.innerHTML = '';
     }
     
-    isRenderingEntries = true;
-    
-    // Actualizar contador
-    updateEntriesCounter(entries);
+    // Actualizar contador con el total global
+    updateEntriesCounter(allEntries);
     
     if (!entries || entries.length === 0) {
-        if (!append) {
-            entriesList.innerHTML = '<p>No hay entradas de bitácora aún.</p>';
-        }
+        if (!append) entriesList.innerHTML = '<p>No hay entradas de bitácora aún.</p>';
         return;
     }
 
-    // Agregar conteos de comentarios y estado de lectura ANTES de renderizar
-    console.log('🔍 Entradas originales:', entries.map(e => ({id: e.id, hasCommentCount: !!e.commentCount})));
-    
-    const entriesWithCounts = await Promise.all(
-        entries.map(async (entry) => {
-            const commentCount = await countComments(entry.id);
-            const isRead = await checkIfCommentsRead(entry.id);
-            console.log(`🔍 Entrada ${entry.id}: ${commentCount} comentarios, leído: ${isRead}`);
-            const entryWithCount = { ...entry, commentCount, isCommentsRead: isRead };
-            return entryWithCount;
-        })
-    );
-    
-    // Usar las entradas con conteos y estado de lectura
-    const entriesToRender = entriesWithCounts;
-    console.log('🔍 Entradas a renderizar:', entriesToRender.map(e => ({id: e.id, commentCount: e.commentCount, isRead: e.isCommentsRead})));
+    // --- OPTIMIZACIÓN: BATCHING DE CONSULTAS ---
+    const entryIds = entries.map(e => e.id);
+    let countsMap = new Map();
+    let readMap = new Map();
 
-    // Detectar si es móvil y mostrar el formato apropiado (cacheado para mejor rendimiento)
-    const isMobile = window.innerWidth <= 768;
+    try {
+        if (supabaseClient && isOnline) {
+            // 1. Obtener todos los conteos de una vez
+            const { data: countsData, error: countsErr } = await supabaseClient
+                .from('comentarios')
+                .select('bitacora_id')
+                .in('bitacora_id', entryIds);
+            
+            if (!countsErr && countsData) {
+                countsData.forEach(c => {
+                    countsMap.set(c.bitacora_id, (countsMap.get(c.bitacora_id) || 0) + 1);
+                });
+            }
+
+            // 2. Obtener todos los estados de lectura de una vez
+            if (currentUser) {
+                const { data: readData, error: readErr } = await supabaseClient
+                    .from('bitacora_read')
+                    .select('bitacora_id')
+                    .in('bitacora_id', entryIds)
+                    .eq('user_id', currentUser.id);
+                
+                if (!readErr && readData) {
+                    readData.forEach(r => readMap.set(r.bitacora_id, true));
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('Error en batch optimization:', err);
+    }
+
+    const entriesWithCounts = entries.map(entry => ({
+        ...entry,
+        commentCount: countsMap.get(entry.id) || 0,
+        isCommentsRead: readMap.get(entry.id) || false
+    }));
     
-    // Crear fragmento para mejor rendimiento
+    const isMobile = window.innerWidth <= 768;
     const fragment = document.createDocumentFragment();
     
     if (isMobile) {
-        // Versión móvil: cards con botones en columna
-        entriesToRender.forEach(entry => {
-            const card = createMobileEntryCard(entry);
-            fragment.appendChild(card);
+        entriesWithCounts.forEach(entry => {
+            fragment.appendChild(createMobileEntryCard(entry));
         });
+        entriesList.appendChild(fragment);
     } else {
-        // Versión desktop: tabla con encabezados fijos separados
-        const tableWrapper = createDesktopTable(entriesToRender);
-        fragment.appendChild(tableWrapper);
+        // Versión desktop
+        if (append) {
+            // Añadir filas al tbody existente
+            const tbody = entriesList.querySelector('tbody');
+            if (tbody) {
+                const rowFragment = document.createDocumentFragment();
+                entriesWithCounts.forEach(entry => {
+                    rowFragment.appendChild(createDesktopRow(entry));
+                });
+                tbody.appendChild(rowFragment);
+            } else {
+                entriesList.appendChild(createDesktopTable(entriesWithCounts));
+            }
+        } else {
+            entriesList.appendChild(createDesktopTable(entriesWithCounts));
+        }
     }
     
-    // Agregar todo de una sola vez para mejor rendimiento
-    entriesList.appendChild(fragment);
-    
-    // Inicializar lazy loading para imágenes después de renderizar
     setTimeout(initializeLazyLoading, 100);
-    
-    // Resetear bandera de renderizado
-    isRenderingEntries = false;
 }
 
-// Crear tarjeta móvil con lazy loading
+// Función para crear una tarjeta de entrada para versión móvil
 function createMobileEntryCard(entry) {
-    console.log('📱 CREANDO MOBILE ENTRY CARD para entrada:', entry.id, 'commentCount:', entry.commentCount, 'typeof:', typeof entry.commentCount);
     const card = document.createElement('div');
     card.className = 'mobile-entry-card';
-    card.setAttribute('data-entry-id', entry.id); // Para actualizaciones en tiempo real
+    card.setAttribute('data-entry-id', entry.id);
 
-    // Formatear fecha igual que en desktop (sin ajuste de zona horaria)
     const fechaUsar = entry.fecha_hora || entry.fecha;
-    let fechaFormateada = '';
+    const fechaFormateada = formatearFechaLocal(fechaUsar);
 
-    if (fechaUsar && fechaUsar.includes('T')) {
-        const [datePart, timePart] = fechaUsar.split('T');
-        const [year, month, day] = datePart.split('-');
-        const [hours, minutes] = timePart.split(':');
-        fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
-    } else if (fechaUsar) {
-        // Si no tiene hora, mostrar solo fecha
-        const [year, month, day] = fechaUsar.split('-');
-        fechaFormateada = `${day}/${month}/${year}`;
-    } else {
-        fechaFormateada = 'Fecha no disponible';
+    // Lógica de "Ver más" para descripción larga
+    const descOriginal = entry.descripcion || '';
+    let descDisplay = descOriginal;
+    if (descOriginal.length > 100) {
+        descDisplay = descOriginal.substring(0, 100) + '... <a href="#" onclick="event.preventDefault(); openDescModal(\'' + descOriginal.replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\')" style="color: #667eea; font-weight: bold; cursor: pointer;">Ver más</a>';
     }
+
+    // Preparar archivos y fotos
+    let archivosHtml = '';
+    let archivos = entry.archivos || entry.fotos || [];
+    if (archivos && archivos.length > 0) {
+        archivosHtml = '<div class="mobile-archivos-container">';
+        archivos.slice(0, 4).forEach(archivo => {
+            const url = typeof archivo === 'string' ? archivo : archivo.url;
+            const name = typeof archivo === 'string' ? '' : archivo.name;
+            const type = typeof archivo === 'string' ? '' : archivo.type;
+            
+            if (type && type.startsWith('image/')) {
+                archivosHtml += `
+                    <div class="mini-photo-container">
+                        <img class="mobile-foto lazy-image" data-src="${url}" onclick="window.open('${url}', '_blank')" title="${name}" />
+                    </div>
+                `;
+            } else {
+                const icon = getFileIcon(name || url);
+                archivosHtml += `<div class="mobile-file-icon" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
+            }
+        });
+        
+        if (archivos.length > 4) {
+            archivosHtml += `
+                <div class="more-photos-mobile" onclick="showAllArchivos('${entry.id}')" style="display: flex; align-items: center; justify-content: center; width: 35px; height: 35px; background: #f0f4ff; border-radius: 4px; border: 1px solid #667eea; color: #667eea; font-weight: bold; font-size: 0.7rem; cursor: pointer;">
+                    +${archivos.length - 4}
+                </div>
+            `;
+        }
+        archivosHtml += '</div>';
+    }
+
+    const actionButtons = `
+        <div class="mobile-actions" style="display: flex; gap: 8px; margin-top: 1rem; border-top: 1px solid #eee; padding-top: 0.8rem;">
+            <button class="comments-btn ${entry.isCommentsRead ? 'comments-read' : ''}" onclick="openCommentsModal(${entry.id})" style="flex: 1; padding: 8px; font-size: 0.85rem;">
+                Responder <span class="comment-count">${entry.commentCount || 0}</span>
+            </button>
+            <button class="edit-btn" onclick="editEntry(${entry.id})" style="flex: 1; padding: 8px; font-size: 0.85rem;">✏️ Editar</button>
+            ${currentUser.role === 'admin' ? `<button class="delete-btn" onclick="deleteEntry(${entry.id})" style="flex: 1; padding: 8px; font-size: 0.85rem;">🗑️ Borrar</button>` : ''}
+        </div>
+    `;
+
+    card.innerHTML = `
+        <div class="mobile-entry-header">
+            <span class="mobile-entry-date">${fechaFormateada}</span>
+            <span class="entry-folio" style="background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;">#${entry.folio || '-'}</span>
+        </div>
+        <div class="mobile-entry-title" style="margin-bottom: 8px; font-weight: bold; color: #2c3e50;">${entry.titulo}</div>
+        
+        <div class="mobile-entry-row" style="margin-bottom: 4px; font-size: 0.9rem;">
+            <span class="mobile-entry-label" style="color: #7f8c8d; font-weight: 600;">Tipo:</span>
+            <span class="mobile-entry-content">${entry.tipo_nota || '-'}</span>
+        </div>
+        
+        <div class="mobile-entry-row" style="margin-bottom: 10px; font-size: 0.9rem;">
+            <span class="mobile-entry-label" style="color: #7f8c8d; font-weight: 600;">Ubicación:</span>
+            <span class="mobile-entry-content">${entry.ubicacion || '-'}</span>
+        </div>
+
+        <div class="mobile-entry-description" style="background: #f8f9fa; padding: 10px; border-radius: 8px; font-size: 0.95rem; border-left: 3px solid #667eea; margin-bottom: 10px;">
+            ${descDisplay}
+        </div>
+        
+        ${archivosHtml}
+        
+        <div class="mobile-entry-row" style="font-size: 0.75rem; color: #95a5a6; margin-top: 8px;">
+            <span class="mobile-entry-label">Autor:</span>
+            <span class="mobile-entry-content mobile-author-email">${entry.profiles?.email || entry.user_id || 'Usuario desconocido'}</span>
+        </div>
+        
+        ${actionButtons}
+    `;
+
+    return card;
+}
+
+// Función auxiliar para crear una fila desktop (extraída para reusabilidad)
+function createDesktopRow(entry) {
+    const row = document.createElement('tr');
+    row.setAttribute('data-entry-id', entry.id);
     
-    // Crear archivos HTML para móvil
-    // Mejorar detección de archivos con múltiples formatos posibles
+    let archivosHtml = '';
     let archivos = [];
     
     if (entry.archivos && Array.isArray(entry.archivos) && entry.archivos.length > 0) {
         archivos = entry.archivos;
     } else if (entry.fotos && Array.isArray(entry.fotos) && entry.fotos.length > 0) {
         archivos = entry.fotos;
-    } else if (typeof entry.archivos === 'string' && entry.archivos.trim() !== '') {
-        // Si es un string JSON, intentar parsearlo
-        try {
-            archivos = JSON.parse(entry.archivos);
-        } catch (e) {
-            // Si no es JSON, tratar como URL simple
-            archivos = [entry.archivos];
-        }
-    } else if (typeof entry.fotos === 'string' && entry.fotos.trim() !== '') {
-        try {
-            archivos = JSON.parse(entry.fotos);
-        } catch (e) {
-            archivos = [entry.fotos];
-        }
     }
     
-    
-    
-    let archivosHtml = '';
-    
     if (archivos && archivos.length > 0) {
-        archivosHtml = '<div class="mobile-archivos-container">';
+        const archivosParaMostrar = archivos.slice(0, 3);
+        archivosHtml = '<div class="archivos-container">';
         
-        archivos.slice(0, 5).forEach(archivo => {
+        archivosParaMostrar.forEach(archivo => {
             const url = typeof archivo === 'string' ? archivo : archivo.url;
             const name = typeof archivo === 'string' ? '' : archivo.name;
             const type = typeof archivo === 'string' ? '' : archivo.type;
             
             if (type && type.startsWith('image/')) {
-                // Si es imagen, mostrar placeholder con lazy loading
                 archivosHtml += `
-                    <div class="mobile-foto-container">
-                        <div class="image-placeholder">📷</div>
-                        <img class="mobile-foto lazy-image" data-src="${url}" onclick="window.open('${url}', '_blank')" title="${name}" />
+                    <div class="mini-photo-container">
+                        <div class="mini-image-placeholder">📷</div>
+                        <img class="mini-photo lazy-image" data-src="${url}" onclick="window.open('${url}', '_blank')" title="${name}" />
                     </div>
                 `;
             } else {
-                // Si es otro tipo de archivo, mostrar icono
                 const icon = getFileIcon(name || url);
-                archivosHtml += `<div class="mobile-file-icon" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
+                archivosHtml += `<div class="file-icon-preview" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
             }
         });
         
-        // Siempre mostrar botón de más archivos si hay más de 5
-        if (archivos.length > 5) {
+        if (archivos.length > 3) {
             archivosHtml += `
-                <span class="mobile-more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los ${archivos.length} archivos">
-                    +${archivos.length - 5}
+                <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los ${archivos.length} archivos">
+                    +${archivos.length - 3}
                 </span>
             `;
         }
-        
         archivosHtml += '</div>';
     } else {
-        archivosHtml = '<div class="no-fotos-mobile">Sin archivos</div>';
+        archivosHtml = '<span class="no-photos">Sin archivos</span>';
     }
     
-    // Botones de acción según rol
-    let actionButtons = '';
-    
-    // Botón de comentarios (siempre visible para todos los usuarios autenticados)
-    const commentCount = entry.commentCount || 0;
-    const isRead = entry.isCommentsRead || false;
-    console.log(`🔨 Creando botón para entrada ${entry.id}, commentCount: ${commentCount}, leído: ${isRead}`);
-actionButtons += `
-        <button class="mobile-action-btn comments-btn ${isRead ? 'comments-read' : ''}" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
-            Responder <span class="comment-count">${commentCount}</span>
+    let actionButtons = `
+        <button class="comments-btn ${entry.isCommentsRead ? 'comments-read' : ''}" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
+            Responder <span class="comment-count">${entry.commentCount || 0}</span>
         </button>
-    `;
-    
-    // Botón de editar siempre visible (la validación está en la función)
-    actionButtons += `
-        <button class="mobile-action-btn mobile-edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
+        <button class="edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
     `;
 
-    // Solo admin puede eliminar
     if (currentUser.role === 'admin') {
-        actionButtons += `
-            <button class="mobile-action-btn mobile-delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
-        `;
+        actionButtons += `<button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>`;
     }
 
-    card.innerHTML = `
-        <div class="mobile-entry-header">
-            <div class="mobile-entry-date">
-                <strong>Folio: ${entry.folio || '-'}</strong><br>
-                ${fechaFormateada}
-            </div>
-        </div>
-        
-        <div class="mobile-entry-row">
-            <div class="mobile-entry-label">Título:</div>
-            <div class="mobile-entry-content">${entry.titulo}</div>
-        </div>
-        
-        ${entry.descripcion ? `
-            <div class="mobile-entry-row">
-                <div class="mobile-entry-label">Descripción:</div>
-                <div class="mobile-entry-content">${entry.descripcion}</div>
-            </div>
-        ` : ''}
-        
-        ${entry.hora_inicio || entry.hora_final ? `
-            <div class="mobile-entry-row">
-                <div class="mobile-entry-label">Horas:</div>
-                <div class="mobile-entry-content">
-                    ${entry.hora_inicio || '-'} ${entry.hora_inicio && entry.hora_final ? 'a' : ''} ${entry.hora_final || '-'}
-                </div>
-            </div>
-        ` : ''}
-        
-        ${entry.tipo_nota ? `
-            <div class="mobile-entry-row">
-                <div class="mobile-entry-label">Tipo Nota:</div>
-                <div class="mobile-entry-content">${entry.tipo_nota}</div>
-            </div>
-        ` : ''}
-        
-        ${entry.ubicacion ? `
-            <div class="mobile-entry-row">
-                <div class="mobile-entry-label">Ubicación:</div>
-                <div class="mobile-entry-content">${entry.ubicacion}</div>
-            </div>
-        ` : ''}
-        
-        <div class="mobile-entry-row">
-            <div class="mobile-entry-label">Usuario:</div>
-            <div class="mobile-entry-content">${entry.profiles?.email || entry.user_id || 'Usuario desconocido'}</div>
-        </div>
-        
-        ${archivosHtml}
-        
-        ${actionButtons ? `
-            <div class="mobile-actions">
-                <div class="mobile-actions-container">${actionButtons}</div>
-            </div>
-        ` : ''}
+    const fechaUsar = entry.fecha_hora || entry.fecha;
+    let fechaFormateada = '';
+    
+    if (fechaUsar.includes('T')) {
+        const [datePart, timePart] = fechaUsar.split('T');
+        const [year, month, day] = datePart.split('-');
+        const [hours, minutes] = timePart.split(':');
+        fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
+    } else {
+        const [year, month, day] = fechaUsar.split('-');
+        fechaFormateada = `${day}/${month}/${year}`;
+    }
+    
+    const descOriginal = entry.descripcion || '';
+    let descDisplay = descOriginal;
+    if (descOriginal.length > 100) {
+        descDisplay = descOriginal.substring(0, 100) + '... <a href="#" onclick="event.preventDefault(); openDescModal(\'' + descOriginal.replace(/'/g, "\\'").replace(/\n/g, "\\n") + '\')" style="color: #667eea; font-weight: bold; cursor: pointer;">Ver más</a>';
+    }
+
+    row.innerHTML = `
+        <td class="col-folio"><strong>${entry.folio || '-'}</strong></td>
+        <td class="col-fecha">${fechaFormateada}</td>
+        <td class="col-titulo">${entry.titulo}</td>
+        <td class="col-desc">${descDisplay}</td>
+        <td class="col-hini">${entry.hora_inicio || '-'}</td>
+        <td class="col-hfin">${entry.hora_final || '-'}</td>
+        <td class="col-tipo">${entry.tipo_nota || '-'}</td>
+        <td class="col-ubic">${entry.ubicacion || ''}</td>
+        <td class="col-user">${entry.profiles?.email || entry.user_id || 'Usuario desconocido'}</td>
+        <td class="col-adj">${archivosHtml}</td>
+        <td class="col-acc">${actionButtons}</td>
     `;
     
-    return card;
+    return row;
 }
 
-// Crear tabla desktop
+// Reemplazar también la función createDesktopTable original para usar createDesktopRow
 function createDesktopTable(entries) {
     const wrapper = document.createElement('div');
     wrapper.className = 'table-wrapper';
@@ -2553,22 +2583,38 @@ function createDesktopTable(entries) {
     const headerTable = document.createElement('table');
     headerTable.className = 'excel-table desktop-table';
     
+    const colgroup = document.createElement('colgroup');
+    colgroup.innerHTML = `
+        <col class="col-folio">
+        <col class="col-fecha">
+        <col class="col-titulo">
+        <col class="col-desc">
+        <col class="col-hini">
+        <col class="col-hfin">
+        <col class="col-tipo">
+        <col class="col-ubic">
+        <col class="col-user">
+        <col class="col-adj">
+        <col class="col-acc">
+    `;
+    
     const thead = document.createElement('thead');
     thead.innerHTML = `
         <tr>
-            <th>Folio</th>
-            <th>Fecha y Hora</th>
-            <th>Título</th>
-            <th>Descripción</th>
-            <th>Hora Inicio</th>
-            <th>Hora Final</th>
-            <th>Tipo Nota</th>
-            <th>Ubicación</th>
-            <th>Usuario</th>
-            <th>Adjuntos</th>
-            <th>Acciones</th>
+            <th class="col-folio">Folio</th>
+            <th class="col-fecha">Fecha<br>Hora</th>
+            <th class="col-titulo">Título</th>
+            <th class="col-desc">Descripción</th>
+            <th class="col-hini">Hora<br>Inicio</th>
+            <th class="col-hfin">Hora<br>Final</th>
+            <th class="col-tipo">Tipo Nota</th>
+            <th class="col-ubic">Ubicación</th>
+            <th class="col-user">Usuario</th>
+            <th class="col-adj">Adjuntos</th>
+            <th class="col-acc">Acciones</th>
         </tr>
     `;
+    headerTable.appendChild(colgroup.cloneNode(true));
     headerTable.appendChild(thead);
     headerContainer.appendChild(headerTable);
     
@@ -2578,153 +2624,14 @@ function createDesktopTable(entries) {
     const bodyTable = document.createElement('table');
     bodyTable.className = 'excel-table desktop-table';
     
-    // Header vacío para mantener estructura
-    const emptyHead = document.createElement('thead');
-    emptyHead.innerHTML = `
-        <tr>
-            <th>Folio</th>
-            <th>Fecha y Hora</th>
-            <th>Título</th>
-            <th>Descripción</th>
-            <th>Hora Inicio</th>
-            <th>Hora Final</th>
-            <th>Tipo Nota</th>
-            <th>Ubicación</th>
-            <th>Usuario</th>
-            <th>Adjuntos</th>
-            <th>Acciones</th>
-        </tr>
-    `;
-    bodyTable.appendChild(emptyHead);
+    bodyTable.appendChild(colgroup.cloneNode(true));
     
-    // Body con los datos
     const tbody = document.createElement('tbody');
     entries.forEach(entry => {
-        const row = document.createElement('tr');
-        row.setAttribute('data-entry-id', entry.id); // Para actualizaciones en tiempo real
-        
-        let archivosHtml = '';
-        
-        // Mejorar detección de archivos para desktop también
-        let archivos = [];
-        
-        if (entry.archivos && Array.isArray(entry.archivos) && entry.archivos.length > 0) {
-            archivos = entry.archivos;
-        } else if (entry.fotos && Array.isArray(entry.fotos) && entry.fotos.length > 0) {
-            archivos = entry.fotos;
-        } else if (typeof entry.archivos === 'string' && entry.archivos.trim() !== '') {
-            try {
-                archivos = JSON.parse(entry.archivos);
-            } catch (e) {
-                archivos = [entry.archivos];
-            }
-        } else if (typeof entry.fotos === 'string' && entry.fotos.trim() !== '') {
-            try {
-                archivos = JSON.parse(entry.fotos);
-            } catch (e) {
-                archivos = [entry.fotos];
-            }
-        }
-        
-        
-        
-        if (archivos && archivos.length > 0) {
-            const archivosParaMostrar = archivos.slice(0, 3);
-            archivosHtml = '<div class="archivos-container">';
-            
-            archivosParaMostrar.forEach(archivo => {
-                const url = typeof archivo === 'string' ? archivo : archivo.url;
-                const name = typeof archivo === 'string' ? '' : archivo.name;
-                const type = typeof archivo === 'string' ? '' : archivo.type;
-                
-                if (type && type.startsWith('image/')) {
-                    // Si es imagen, mostrar placeholder con lazy loading
-                    archivosHtml += `
-                        <div class="mini-photo-container">
-                            <div class="mini-image-placeholder">📷</div>
-                            <img class="mini-photo lazy-image" data-src="${url}" onclick="window.open('${url}', '_blank')" title="${name}" />
-                        </div>
-                    `;
-                } else {
-                    // Si es otro tipo de archivo, mostrar icono
-                    const icon = getFileIcon(name || url);
-                    archivosHtml += `<div class="file-icon-preview" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
-                }
-            });
-            
-            // Siempre mostrar botón de más archivos si hay más de 3 en desktop
-            if (archivos.length > 3) {
-                archivosHtml += `
-                    <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los ${archivos.length} archivos">
-                        +${archivos.length - 3}
-                    </span>
-                `;
-            }
-            
-            archivosHtml += '</div>';
-        } else {
-            archivosHtml = '<span class="no-photos">Sin archivos</span>';
-        }
-        
-        // Botones de acción según rol
-        let actionButtons = '';
-        
-        // Botón de comentarios (siempre visible para todos los usuarios autenticados)
-        actionButtons += `
-            <button class="comments-btn ${entry.isCommentsRead ? 'comments-read' : ''}" onclick="openCommentsModal(${entry.id})" title="Ver y responder comentarios">
-                Responder <span class="comment-count">${entry.commentCount || 0}</span>
-            </button>
-        `;
-        
-        // Botón de editar siempre visible (la validación está en la función)
-        actionButtons += `
-            <button class="edit-btn" onclick="editEntry(${entry.id})">✏️ Editar</button>
-        `;
-
-        // Solo admin puede eliminar
-        if (currentUser.role === 'admin') {
-            actionButtons += `
-                <button class="delete-btn" onclick="deleteEntry(${entry.id})">🗑️ Eliminar</button>
-            `;
-        }
-
-        // Formatear fecha directamente desde datetime-local
-        const fechaUsar = entry.fecha_hora || entry.fecha;
-        let fechaFormateada = '';
-        
-        if (fechaUsar.includes('T')) {
-            const [datePart, timePart] = fechaUsar.split('T');
-            const [year, month, day] = datePart.split('-');
-            const [hours, minutes] = timePart.split(':');
-            
-            // Formatear como DD/MM/YYYY HH:MM
-            fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
-        } else {
-            // Si no tiene hora, mostrar solo fecha
-            const [year, month, day] = fechaUsar.split('-');
-            fechaFormateada = `${day}/${month}/${year}`;
-        }
-        
-        row.innerHTML = `
-            <td><strong>${entry.folio || '-'}</strong></td>
-            <td>${fechaFormateada}</td>
-            <td>${entry.titulo}</td>
-            <td>${entry.descripcion || ''}</td>
-            <td>${entry.hora_inicio || '-'}</td>
-            <td>${entry.hora_final || '-'}</td>
-            <td>${entry.tipo_nota || '-'}</td>
-            <td>${entry.ubicacion || ''}</td>
-            <td>${entry.profiles?.email || entry.user_id || 'Usuario desconocido'}</td>
-            <td>${archivosHtml}</td>
-            <td>${actionButtons}</td>
-        `;
-        
-        row.dataset.archivos = JSON.stringify(entry.archivos || entry.fotos || []);
-        tbody.appendChild(row);
+        tbody.appendChild(createDesktopRow(entry));
     });
     bodyTable.appendChild(tbody);
     
-    // Ensamblar todo
     bodyContainer.appendChild(bodyTable);
     wrapper.appendChild(headerContainer);
     wrapper.appendChild(bodyContainer);
@@ -2755,22 +2662,36 @@ function showAllArchivos(entryId) {
     if (archivos.length > 0) {
         const modal = document.createElement('div');
         modal.className = 'photo-modal';
-        
+
+        // Filtrar solo las imágenes para el botón de descarga masiva
+        const imagenes = archivos.filter(archivo => {
+            const type = typeof archivo === 'string' ? '' : archivo.type;
+            const name = typeof archivo === 'string' ? archivo : archivo.name;
+            return (type && type.startsWith('image/')) || (name && name.match(/\.(jpg|jpeg|png|gif|webp)$/i));
+        });
+
         let modalContent = '<div class="modal-content">';
         modalContent += `
             <div class="modal-header">
                 <h3>Todos los archivos (${archivos.length})</h3>
-                <button class="close-modal" onclick="this.closest('.photo-modal').remove()">✕</button>
+                <div class="modal-header-actions" style="display: flex; gap: 10px; align-items: center;">
+                    ${imagenes.length > 0 ? `
+                        <button class="download-all-btn" id="downloadAllImagesBtn" title="Descargar todas las imágenes">
+                            📥 Descargar Imágenes (${imagenes.length})
+                        </button>
+                    ` : ''}
+                    <button class="close-modal" onclick="this.closest('.photo-modal').remove()">✕</button>
+                </div>
             </div>
             <div class="files-grid">
         `;
-        
+
         archivos.forEach(archivo => {
             const url = typeof archivo === 'string' ? archivo : archivo.url;
             const name = typeof archivo === 'string' ? '' : archivo.name;
             const type = typeof archivo === 'string' ? '' : archivo.type;
             const size = typeof archivo === 'string' ? '' : archivo.size;
-            
+
             if (type && type.startsWith('image/')) {
                 // Para imágenes
                 modalContent += `
@@ -2797,13 +2718,98 @@ function showAllArchivos(entryId) {
                 `;
             }
         });
-        
+
         modalContent += '</div></div>';
         modal.innerHTML = modalContent;
         document.body.appendChild(modal);
+
+        // Agregar evento al botón de descarga masiva
+        const downloadBtn = modal.querySelector('#downloadAllImagesBtn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => downloadAllImages(imagenes));
+        }
         // console.log('Modal de archivos agregado');
-} else {
+    } else {
         // console.log('No hay archivos para mostrar');
+    }
+}
+
+// Función para descargar todas las imágenes en un archivo ZIP
+async function downloadAllImages(imagenes) {
+    if (!imagenes || imagenes.length === 0) return;
+
+    if (typeof JSZip === 'undefined') {
+        showNotification('⚠️ La librería de compresión aún se está cargando o no está disponible.', 'warning');
+        // Fallback a descarga individual si JSZip no está
+        const confirmacion = confirm(`La descarga ZIP no está disponible. ¿Deseas descargar las ${imagenes.length} imágenes individualmente?`);
+        if (confirmacion) {
+            for (let i = 0; i < imagenes.length; i++) {
+                const archivo = imagenes[i];
+                const url = typeof archivo === 'string' ? archivo : archivo.url;
+                const name = typeof archivo === 'string' ? `imagen_${i + 1}.jpg` : archivo.name;
+                window.open(url, '_blank');
+            }
+        }
+        return;
+    }
+
+    const confirmacion = confirm(`¿Deseas descargar las ${imagenes.length} imágenes en un archivo comprimido (.zip)?`);
+    if (!confirmacion) return;
+
+    const zip = new JSZip();
+    const folder = zip.folder("imagenes_bitacora");
+
+    showNotification(`📦 Preparando archivo ZIP con ${imagenes.length} imágenes...`, 'info', 5000);
+
+    let descargados = 0;
+    const total = imagenes.length;
+
+    // Descargar cada imagen y añadirla al ZIP
+    const promesas = imagenes.map(async (archivo, index) => {
+        const url = typeof archivo === 'string' ? archivo : archivo.url;
+        let name = typeof archivo === 'string' ? `imagen_${index + 1}.jpg` : archivo.name;
+
+        // Asegurarse de que el nombre tenga una extensión válida para el ZIP
+        if (!name.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            name += '.jpg';
+        }
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Error al descargar');
+            const blob = await response.blob();
+            folder.file(name, blob);
+            descargados++;
+            // Opcional: actualizar notificación de progreso
+        } catch (error) {
+            console.error(`Error al añadir ${name} al ZIP:`, error);
+        }
+    });
+
+    await Promise.all(promesas);
+
+    if (descargados === 0) {
+        showNotification('❌ No se pudo descargar ninguna imagen para el ZIP', 'error');
+        return;
+    }
+
+    try {
+        showNotification('🚀 Generando archivo ZIP...', 'info', 3000);
+        const content = await zip.generateAsync({type:"blob"});
+        const zipName = `bitacora_imagenes_${new Date().getTime()}.zip`;
+
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(content);
+        link.download = zipName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        window.URL.revokeObjectURL(link.href);
+        showNotification('✅ Archivo ZIP descargado con éxito', 'success', 3000);
+    } catch (error) {
+        console.error('Error generando ZIP:', error);
+        showNotification('❌ Error al generar el archivo ZIP', 'error');
     }
 }
 
@@ -3783,6 +3789,11 @@ function formatFileSize(bytes) {
 
 // Lazy loading para imágenes
 function initializeLazyLoading() {
+    if (!window.IntersectionObserver) return;
+    
+    // Solo observar imágenes que no han sido observadas aún
+    const lazyImages = document.querySelectorAll('.lazy-image:not([data-observed])');
+    
     const imageObserver = new IntersectionObserver((entries, observer) => {
         entries.forEach(entry => {
             if (entry.isIntersecting) {
@@ -3791,24 +3802,27 @@ function initializeLazyLoading() {
                 
                 // Cargar imagen
                 img.onload = () => {
-                    if (placeholder) {
+                    if (placeholder && placeholder.classList.contains('image-placeholder')) {
                         placeholder.style.display = 'none';
                     }
-                    img.style.opacity = '1';
+                    img.classList.add('loaded');
                 };
                 
-                img.src = img.dataset.src;
-                img.classList.remove('lazy-image');
-                observer.unobserve(img);
+                if (img.dataset.src) {
+                    img.src = img.dataset.src;
+                    // Dejar de observar inmediatamente para liberar recursos
+                    observer.unobserve(img);
+                }
             }
         });
     }, {
-        rootMargin: '50px' // Cargar 50px antes de que sea visible
+        rootMargin: '100px 0px', // Cargar 100px antes
+        threshold: 0.01
     });
-    
-    // Observar todas las imágenes lazy
-    document.querySelectorAll('.lazy-image').forEach(img => {
+
+    lazyImages.forEach(img => {
         imageObserver.observe(img);
+        img.setAttribute('data-observed', 'true');
     });
 }
 
@@ -6109,31 +6123,43 @@ async function generateLargePDF(entries) {
 function generateBatchHTML(entries, startNumber) {
     const html = `
         <div style="font-family: Arial; padding: 20px; background: white;">
-            <h2 style="color: #2c3e50; margin-bottom: 20px;">
-                Bitácora - Entradas ${startNumber}-${startNumber + entries.length - 1}
+            <h2 style="color: #2c3e50; margin-bottom: 20px; text-align: center;">
+                📋 BITÁCORA DE OBRA - REPORTE ACTUALIZADO (Lote)
             </h2>
-            <table style="width: 100%; border-collapse: collapse; font-size: 10px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed;">
                 <thead>
-                    <tr style="background: #667eea; color: white;">
-                        <th style="border: 1px solid #ddd; padding: 5px;">#</th>
-                        <th style="border: 1px solid #ddd; padding: 5px;">Fecha</th>
-                        <th style="border: 1px solid #ddd; padding: 5px;">Título</th>
-                        <th style="border: 1px solid #ddd; padding: 5px;">Descripción</th>
-                        <th style="border: 1px solid #ddd; padding: 5px;">Tipo</th>
-                        <th style="border: 1px solid #ddd; padding: 5px;">Ubicación</th>
+                    <tr style="background: #1976d2; color: white;">
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 4%;">#</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 8%;">Fecha</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 18%;">Título</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 32%;">Descripción</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 5%;">Tipo</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 10%;">Ubicación</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 10%;">Usuario</th>
+                        <th style="border: 1px solid #ddd; padding: 4px; width: 13%;">Comentarios</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${entries.map((entry, index) => `
+                    ${entries.map((entry, index) => {
+                        const userEmail = entry.profiles?.email || entry.user_id || 'Usuario';
+                        let comentariosTexto = 'Sin comentarios';
+                        if (entry.comments && entry.comments.length > 0) {
+                            comentariosTexto = entry.comments.map(c => c.comentario).join(' | ');
+                        }
+
+                        return `
                         <tr style="${index % 2 === 0 ? 'background: #f9f9f9;' : ''}">
-                            <td style="border: 1px solid #ddd; padding: 5px;">${entry.folio || startNumber + index}</td>
-                            <td style="border: 1px solid #ddd; padding: 5px;">${formatearFechaLocal(entry.fecha_hora || entry.fecha)}</td>
-                            <td style="border: 1px solid #ddd; padding: 5px; max-width: 150px; word-wrap: break-word;">${entry.titulo || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 5px; max-width: 200px; word-wrap: break-word;">${entry.descripcion || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 5px;">${entry.tipo_nota || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 5px; max-width: 100px; word-wrap: break-word;">${entry.ubicacion || ''}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; text-align: center;">${entry.folio || startNumber + index}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top;">${formatearFechaLocal(entry.fecha_hora || entry.fecha)}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; font-weight: bold;">${entry.titulo || ''}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; background-color: #e3f2fd;">${entry.descripcion || ''}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; text-align: center;">${entry.tipo_nota || ''}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top;">${entry.ubicacion || ''}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; font-size: 7px;">${userEmail}</td>
+                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; font-size: 7px;">${comentariosTexto}</td>
                         </tr>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </tbody>
             </table>
         </div>
@@ -6146,6 +6172,7 @@ function generateBatchHTML(entries, startNumber) {
 
 // Función para descargar PDF
 async function downloadPDF() {
+    // Iniciando descarga de reporte detallado
     // Verificar que las librerías necesarias estén cargadas
     if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined' || !window.jspdf.jsPDF) {
         showNotification('❌ Error: Las librerías para generar PDF no están disponibles', 'error');
@@ -6335,19 +6362,17 @@ async function downloadPDF() {
                 </div>
             </div>
             <div style="margin-bottom: 10px; width: calc(100% - 6px); box-sizing: border-box;">
-                <table style="width: 100%; max-width: 100%; border-collapse: collapse; font-size: 7px; table-layout: fixed; margin: 0 auto; page-break-inside: auto;">
+                <table class="pdf-export-table" style="width: 100%; max-width: 100%; border-collapse: collapse; font-size: 7px; table-layout: auto; margin: 0 auto; page-break-inside: auto; background-color: white;">
                     <thead>
-                        <tr style="background-color: #1976d2; color: white; height: 18px;">
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Título</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 20%; font-weight: bold;">Descripción</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Inicio</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Final</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 6%; font-weight: bold;">Tipo</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Ubicación</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 12%; font-weight: bold;">Usuario</th>
-                            <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 20%; font-weight: bold;">Comentarios</th>
+                        <tr style="background-color: #2e7d32; color: white; height: 18px;">
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 15%; font-weight: bold;">Título</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 35%; font-weight: bold;">Descripción</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 5%; font-weight: bold;">Tipo</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 10%; font-weight: bold;">Ubicación</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 10%; font-weight: bold;">Usuario</th>
+                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 13%; font-weight: bold;">Comentarios</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -6368,43 +6393,41 @@ async function downloadPDF() {
                 fechaFormateada = `${day}/${month}/${year}`;
             }
             
-            // Truncar texto largo ajustado a nuevos anchos
-            const titulo = (entry.titulo || '').substring(0, 60) + ((entry.titulo || '').length > 60 ? '...' : '');
-            const descripcion = (entry.descripcion || '').substring(0, 120) + ((entry.descripcion || '').length > 120 ? '...' : '');
-            const userEmail = (entry.profiles?.email || entry.user_id || 'Usuario desconocido'); // Sin truncar para que se vea completo
-            
-            // Formatear comentarios para mostrar en el PDF (completos)
-            let comentariosTexto = '';
-            if (entry.comments && entry.comments.length > 0) {
-                comentariosTexto = entry.comments.map((comment, index) => {
-                    const commentDate = new Date(comment.created_at).toLocaleString('es-CO', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
-                    });
-                    const author = comment.profiles?.email || `Usuario ${comment.user_id}`;
-                    return `${index + 1}. [${commentDate}] ${author}: ${comment.comentario}`;
-                }).join(' | ');
-            } else {
-                comentariosTexto = 'Sin comentarios';
-            }
-            
-            const rowColor = entryIndex % 2 === 0 ? '#ffffff' : '#f8f9fa';
-            const ubicacion = (entry.ubicacion || '').substring(0, 30) + ((entry.ubicacion || '').length > 30 ? '...' : '');
+                // Textos completos sin truncar
+                const titulo = entry.titulo || '';
+                const descripcion = entry.descripcion || '';
+                const userEmail = (entry.profiles?.email || entry.user_id || 'Usuario desconocido'); 
+                
+                // Formatear comentarios para mostrar en el PDF (completos)
+                let comentariosTexto = '';
+                if (entry.comments && entry.comments.length > 0) {
+                    comentariosTexto = entry.comments.map((comment, index) => {
+                        const commentDate = new Date(comment.created_at).toLocaleString('es-CO', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                        });
+                        const author = comment.profiles?.email || `Usuario ${comment.user_id}`;
+                        return `${index + 1}. [${commentDate}] ${author}: ${comment.comentario}`;
+                    }).join(' | ');
+                } else {
+                    comentariosTexto = 'Sin comentarios';
+                }
+                
+                const rowColor = entryIndex % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                const ubicacion = entry.ubicacion || '';
             pdfHTML += `
-                <tr style="font-size: 7px; height: 15px; background-color: ${rowColor}; page-break-inside: avoid;">
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; font-weight: bold; color: #000000;">${entry.folio || '-'}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${fechaFormateada}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000; font-weight: bold;">${titulo}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${descripcion}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; overflow: hidden; color: #000000;">${entry.hora_inicio || '-'}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; overflow: hidden; color: #000000;">${entry.hora_final || '-'}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${entry.tipo_nota || '-'}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; overflow: hidden; color: #000000;">${ubicacion}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; overflow: visible; color: #000000; white-space: normal;">${userEmail}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; overflow: visible; color: #000000; white-space: normal; font-size: 6px;">${comentariosTexto}</td>
+                <tr style="font-size: 7px; background-color: ${rowColor}; page-break-inside: auto;">
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; font-weight: bold; color: #000000; vertical-align: top;">${entry.folio || '-'}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; color: #000000; vertical-align: top;">${fechaFormateada}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; font-weight: bold; vertical-align: top;">${titulo}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 3px; text-align: justify; word-wrap: break-word; color: #000000; vertical-align: top; line-height: 1.2; background-color: #e3f2fd;">${descripcion}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; color: #000000; vertical-align: top;">${entry.tipo_nota || '-'}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top;">${ubicacion}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top; font-size: 6px;">${userEmail}</td>
+                    <td style="border: 1px solid #bbdefb; padding: 3px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top; font-size: 6px; line-height: 1.1;">${comentariosTexto}</td>
                 </tr>
             `;
         });
@@ -6446,184 +6469,156 @@ async function downloadPDF() {
 
         // Crear PDF
         const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
-
-        const pageWidth = 210;  // Ancho de página A4 en vertical
-        const pageHeight = 297;  // Alto de página A4 en vertical
-        const marginTop = 10;
-        const marginBottom = 10;
+        const pageWidth = 210;
+        const pageHeight = 297;
+        const marginTop = 15;
+        const marginBottom = 15;
+        const marginLeft = 10;
+        const marginRight = 10;
+        const usableWidth = pageWidth - marginLeft - marginRight;
         const usableHeight = pageHeight - marginTop - marginBottom;
 
-        // Calcular cuántas filas caben en una página
-        const rowHeight = 15;  // Altura de cada fila en mm (aproximado)
-        const headerHeight = 20; // Altura del header + tabla
-        const rowsPerPage = Math.floor((usableHeight - headerHeight) / rowHeight);
+        // Estilos y anchos de columnas (Ajustados según solicitud)
+        const colWidths = {
+            folio: usableWidth * 0.04,
+            fecha: usableWidth * 0.08,
+            titulo: usableWidth * 0.10,
+            desc: usableWidth * 0.60, // Aumentado al 60%
+            tipo: usableWidth * 0.05,
+            ubica: usableWidth * 0.06,
+            coment: usableWidth * 0.07
+        };
 
-        console.log('🔍 Debug PDF - Filas por página:', rowsPerPage);
+        let currentY = marginTop;
+        let currentPage = 1;
 
-        // Dividir las entradas en páginas
-        const totalPages = Math.ceil(entriesWithComments.length / rowsPerPage);
-        console.log('🔍 Debug PDF - Total páginas:', totalPages);
+        // Función para dibujar el encabezado en cada página
+        const drawHeader = (pageNum) => {
+            const headerHeight = 25;
+            // Fondo del encabezado
+            pdf.setDrawColor(30, 58, 138);
+            pdf.setFillColor(30, 58, 138);
+            pdf.roundedRect(marginLeft, marginTop, usableWidth, headerHeight, 3, 3, 'F');
+            
+            // Texto del encabezado
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(14);
+            pdf.setFont('helvetica', 'bold');
+            pdf.text('BITACORA DE OBRA', pageWidth / 2, marginTop + 10, { align: 'center' });
+            
+            pdf.setFontSize(8);
+            pdf.setFont('helvetica', 'normal');
+            pdf.text(`Usuario: ${currentUser?.email || 'Admin'} | Total: ${entriesWithComments.length} entradas`, marginLeft + 5, marginTop + 18);
+            pdf.text(`Filtros: ${filtersText}`, marginLeft + 5, marginTop + 22);
+            pdf.text(`Página ${pageNum}`, pageWidth - marginRight - 15, marginTop + 22);
+            
+            currentY = marginTop + headerHeight + 5;
 
-        // Generar una imagen por página para evitar cortes
-        for (let page = 0; page < totalPages; page++) {
-            const startIndex = page * rowsPerPage;
-            const endIndex = Math.min(startIndex + rowsPerPage, entriesWithComments.length);
-            const pageEntries = entriesWithComments.slice(startIndex, endIndex);
+            // Dibujar cabecera de tabla
+            pdf.setFillColor(30, 64, 175);
+            pdf.rect(marginLeft, currentY, usableWidth, 8, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(6);
+            pdf.setFont('helvetica', 'bold');
+            
+            let x = marginLeft;
+            pdf.text('Folio', x + colWidths.folio/2, currentY + 5, { align: 'center' }); x += colWidths.folio;
+            pdf.text('Fecha', x + colWidths.fecha/2, currentY + 5, { align: 'center' }); x += colWidths.fecha;
+            pdf.text('Título', x + colWidths.titulo/2, currentY + 5, { align: 'center' }); x += colWidths.titulo;
+            pdf.text('Descripción', x + colWidths.desc/2, currentY + 5, { align: 'center' }); x += colWidths.desc;
+            pdf.text('Tipo', x + colWidths.tipo/2, currentY + 5, { align: 'center' }); x += colWidths.tipo;
+            pdf.text('Ubicación', x + colWidths.ubica/2, currentY + 5, { align: 'center' }); x += colWidths.ubica;
+            pdf.text('Comentarios', x + colWidths.coment/2, currentY + 5, { align: 'center' });
+            
+            currentY += 8;
+        };
 
-            console.log(`🔍 Debug PDF - Página ${page + 1}: entradas ${startIndex + 1} a ${endIndex}`);
+        drawHeader(currentPage);
 
-            // Crear HTML para esta página
-            let pageHTML = `
-                <div style="width: 210mm; background: white; padding: 10mm; font-family: Arial, sans-serif; font-size: 11px; line-height: 1.3; box-sizing: border-box;">
-                    <div style="margin-bottom: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 12px; width: 100%; box-sizing: border-box;">
-                        <div style="text-align: center; color: #ffffff; font-size: 18px; font-weight: bold; margin-bottom: 8px;">
-                            📋 BITÁCORA DE OBRA
-                        </div>
-                        <div style="text-align: center; color: #f8f9fa; font-size: 11px; margin-bottom: 4px;">
-                            👤 ${currentUser?.email || 'Usuario desconocido'} | 📊 ${entriesWithComments.length} entradas
-                        </div>
-                        <div style="text-align: center; color: #e8eaf6; font-size: 9px; margin-bottom: 4px;">
-                            🔍 ${filtersText}
-                        </div>
-                        <div style="text-align: center; color: #c5cae9; font-size: 8px;">
-                            🕐 ${new Date().toLocaleString('es-CO')}
-                        </div>
-                    </div>
-                    <div style="width: 100%; box-sizing: border-box;">
-                        <table style="width: 100%; border-collapse: collapse; font-size: 7px; table-layout: fixed;">
-                            <thead>
-                                <tr style="background-color: #1976d2; color: white; height: 18px;">
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Título</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 20%; font-weight: bold;">Descripción</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Inicio</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 5%; font-weight: bold;">H. Final</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 6%; font-weight: bold;">Tipo</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 10%; font-weight: bold;">Ubicación</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 12%; font-weight: bold;">Usuario</th>
-                                    <th style="border: 1px solid #0d47a1; padding: 1px; text-align: center; width: 20%; font-weight: bold;">Comentarios</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
+        // Contenedor para renderizar filas individuales
+        const rowMeasure = document.createElement('div');
+        rowMeasure.style.cssText = `position: fixed; top: -9999px; width: ${usableWidth}mm; font-family: Arial; font-size: 7px;`;
+        document.body.appendChild(rowMeasure);
 
-            // Agregar filas de esta página
-            pageEntries.forEach((entry) => {
-                const fechaUsar = entry.fecha_hora || entry.fecha;
-                let fechaFormateada = '';
+        for (const entry of entriesWithComments) {
+            const fecha = (entry.fecha_hora || entry.fecha).split('T')[0].split('-').reverse().join('/');
+            const comentarios = entry.comments?.length > 0 
+                ? entry.comments.map(c => `• ${c.comentario}`).join('<br>') 
+                : 'Sin comentarios';
 
-                if (fechaUsar.includes('T')) {
-                    const [datePart, timePart] = fechaUsar.split('T');
-                    const [year, month, day] = datePart.split('-');
-                    const [hours, minutes] = timePart.split(':');
-                    fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
-                } else {
-                    const [year, month, day] = fechaUsar.split('-');
-                    fechaFormateada = `${day}/${month}/${year}`;
-                }
-
-                const titulo = (entry.titulo || '').substring(0, 60) + ((entry.titulo || '').length > 60 ? '...' : '');
-                const descripcion = (entry.descripcion || '').substring(0, 120) + ((entry.descripcion || '').length > 120 ? '...' : '');
-                const userEmail = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
-
-                let comentariosTexto = '';
-                if (entry.comments && entry.comments.length > 0) {
-                    comentariosTexto = entry.comments.map((comment, index) => {
-                        const commentDate = new Date(comment.created_at).toLocaleString('es-CO', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: false
-                        });
-                        const author = comment.profiles?.email || `Usuario ${comment.user_id}`;
-                        return `${index + 1}. [${commentDate}] ${author}: ${comment.comentario}`;
-                    }).join(' | ');
-                } else {
-                    comentariosTexto = 'Sin comentarios';
-                }
-
-                const ubicacion = (entry.ubicacion || '').substring(0, 30) + ((entry.ubicacion || '').length > 30 ? '...' : '');
-
-                pageHTML += `
-                    <tr style="font-size: 7px; height: 15px;">
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; font-weight: bold; color: #000000;">${entry.folio || '-'}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${fechaFormateada}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000; font-weight: bold;">${titulo}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${descripcion}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; color: #000000;">${entry.hora_inicio || '-'}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; color: #000000;">${entry.hora_final || '-'}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${entry.tipo_nota || '-'}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 1px; text-align: center; word-wrap: break-word; color: #000000;">${ubicacion}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000;">${userEmail}</td>
-                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; font-size: 6px;">${comentariosTexto}</td>
+            // HTML de la fila para medir
+            rowMeasure.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
+                    <tr>
+                        <td style="width: 4%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top;">${entry.folio || '-'}</td>
+                        <td style="width: 8%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top;">${fecha}</td>
+                        <td style="width: 10%; border: 0.1pt solid #bfdbfe; padding: 2px; font-weight: bold; vertical-align: top;">${entry.titulo || ''}</td>
+                        <td id="desc-cell" style="width: 60%; border: 0.1pt solid #bfdbfe; padding: 3px; text-align: justify; vertical-align: top; background: #f8fafc;">${entry.descripcion || ''}</td>
+                        <td style="width: 5%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top;">${entry.tipo_nota || ''}</td>
+                        <td style="width: 6%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top;">${entry.ubicacion || ''}</td>
+                        <td style="width: 7%; border: 0.1pt solid #bfdbfe; padding: 2px; font-size: 5.5px; vertical-align: top;">${comentarios}</td>
                     </tr>
-                `;
-            });
-
-            pageHTML += `
-                            </tbody>
-                        </table>
-                    </div>
-                    <div style="margin-top: 15px; text-align: center; color: #000000; font-size: 9px;">
-                        <hr style="border: 1px solid #90caf9; margin: 5px 0;">
-                        Bitácora de Obra - Sistema de Registro Digital - Página ${page + 1} de ${totalPages}
-                    </div>
-                </div>
+                </table>
             `;
 
-            // Crear contenedor temporal para esta página
-            const pageContainer = document.createElement('div');
-            pageContainer.style.cssText = `
-                position: fixed;
-                top: -9999px;
-                left: -9999px;
-                width: 210mm;
-                background: white;
-                z-index: -9999;
-            `;
-            pageContainer.innerHTML = pageHTML;
-            document.body.appendChild(pageContainer);
+            const canvas = await html2canvas(rowMeasure, { scale: 3, useCORS: true });
+            const rowHeightMM = (canvas.height * usableWidth) / canvas.width;
 
-            // Esperar renderizado
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // ¿Cabe la fila entera en el espacio que queda de la hoja?
+            if (currentY + rowHeightMM > (pageHeight - marginBottom)) {
+                // Si la fila es más alta que una hoja entera (caso extremo) o si ya no hay espacio
+                // Vamos a "rebanar" el canvas de la fila
+                let remainingRowHeight = rowHeightMM;
+                let canvasOffset = 0;
 
-            // Generar canvas de esta página
-            const canvas = await html2canvas(pageContainer, {
-                scale: 2,
-                useCORS: true,
-                allowTaint: true,
-                width: pageContainer.scrollWidth,
-                height: pageContainer.scrollHeight,
-                windowWidth: pageContainer.scrollWidth,
-                windowHeight: pageContainer.scrollHeight,
-                backgroundColor: '#ffffff'
-            });
+                while (remainingRowHeight > 0) {
+                    const spaceLeft = (pageHeight - marginBottom) - currentY;
+                    
+                    // Si el espacio que queda es muy pequeño, saltar página
+                    if (spaceLeft < 15 && canvasOffset === 0) {
+                        pdf.addPage();
+                        currentPage++;
+                        drawHeader(currentPage);
+                        continue;
+                    }
 
-            // Agregar imagen al PDF
-            const imgData = canvas.toDataURL('image/png');
-            const imgHeight = (canvas.height * pageWidth) / canvas.width;
+                    // Cuánto de la fila podemos meter en esta página
+                    const heightToDraw = Math.min(remainingRowHeight, spaceLeft);
+                    
+                    // Ratio para el corte del canvas
+                    const sourceY = (canvasOffset * canvas.height) / rowHeightMM;
+                    const sourceHeight = (heightToDraw * canvas.height) / rowHeightMM;
 
-            if (page > 0) {
-                pdf.addPage();
+                    // Crear un canvas temporal para el trozo
+                    const tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = canvas.width;
+                    tempCanvas.height = sourceHeight;
+                    const ctx = tempCanvas.getContext('2d');
+                    ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+
+                    pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', marginLeft, currentY, usableWidth, heightToDraw);
+
+                    remainingRowHeight -= heightToDraw;
+                    canvasOffset += heightToDraw;
+
+                    if (remainingRowHeight > 0) {
+                        pdf.addPage();
+                        currentPage++;
+                        drawHeader(currentPage);
+                    } else {
+                        currentY += heightToDraw;
+                    }
+                }
+            } else {
+                // Cabe perfectamente
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', marginLeft, currentY, usableWidth, rowHeightMM);
+                currentY += rowHeightMM;
             }
-
-            pdf.addImage(imgData, 'PNG', 0, marginTop, pageWidth, imgHeight);
-
-            // Limpiar contenedor
-            document.body.removeChild(pageContainer);
         }
-        
-        // Limpiar el contenedor
-        document.body.removeChild(pdfContainer);
 
-        
-        // Limpiar el contenedor si existe
-        if (pdfContainer && pdfContainer.parentNode) {
-            document.body.removeChild(pdfContainer);
-        }
-        pdfContainer = null;
+        document.body.removeChild(rowMeasure);
+        if (pdfContainer && pdfContainer.parentNode) document.body.removeChild(pdfContainer);
+
         
         // Generar nombre de archivo con fecha
         const fechaArchivo = new Date().toISOString().split('T')[0];

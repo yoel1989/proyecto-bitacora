@@ -15,3 +15,5 @@ temp-*
 *.tmp
 package-lock.json
 yarn.lock
+.wrangler/
+index.html_temp

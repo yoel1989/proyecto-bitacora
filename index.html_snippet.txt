@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <title>📋 Bitácora de Obra</title>
+    <link rel="stylesheet" href="styles.css?v=20260420">
+    <!-- Scripts externos se asumen cargados en el original -->
+</head>
+<body>
+    <!-- Se asume el body original con el parche del modal -->
+    <!-- ... (Contenido de Bitácora) ... -->
+
+    <!-- Modal para ver descripción completa -->
+    <div id="descModal" class="photo-modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px; height: auto; min-height: 200px;">
+            <div class="modal-header">
+                <h3>📝 Descripción Completa</h3>
+                <button class="close-modal" onclick="closeDescModal()">✕</button>
+            </div>
+            <div id="fullDescContent" style="padding: 20px; line-height: 1.6; font-size: 1.1rem; white-space: pre-wrap; word-wrap: break-word;"></div>
+        </div>
+    </div>
+    
+    <script>
+        function openDescModal(text) {
+            document.getElementById('fullDescContent').textContent = text;
+            document.getElementById('descModal').style.display = 'flex';
+        }
+        function closeDescModal() {
+            document.getElementById('descModal').style.display = 'none';
+        }
+        window.onclick = function(event) {
+            const modal = document.getElementById('descModal');
+            if (event.target == modal) {
+                closeDescModal();
+            }
+        }
+    </script>
+</body>
+</html>

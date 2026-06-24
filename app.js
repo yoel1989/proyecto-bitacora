@@ -2071,11 +2071,12 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
     let filteredEntries = [...allEntries];
 
     // Verificar si hay filtros que requieran cargar todas las entradas de la base de datos
+    const searchTerm = document.getElementById('searchInput').value.trim();
     const tipoFilter = document.getElementById('tipoFilter').value;
     const ubicacionFilter = document.getElementById('ubicacionFilter').value;
     const fechaInicioFilter = document.getElementById('fechaInicioFilter').value;
     const fechaFinalFilter = document.getElementById('fechaFinalFilter').value;
-    const hasAdvancedFilters = tipoFilter || ubicacionFilter || fechaInicioFilter || fechaFinalFilter;
+    const hasAdvancedFilters = searchTerm || tipoFilter || ubicacionFilter || fechaInicioFilter || fechaFinalFilter;
 
     // Si hay filtros avanzados, cargar todas las entradas de la base de datos
     if (hasAdvancedFilters) {
@@ -2084,7 +2085,8 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
         try {
             let query = supabaseClient
                 .from('bitacora')
-                .select('*', { count: 'exact' })
+                .select('id, fecha, fecha_hora, titulo, descripcion, tipo_nota, ubicacion, user_id, folio, hora_inicio, hora_final', { count: 'exact' })
+                .limit(5000)
                 .order('fecha', { ascending: false });
 
             // Aplicar filtros en la consulta SQL
@@ -2158,10 +2160,23 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
     }
 
     // Filtrar por búsqueda (siempre se hace en JavaScript)
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     console.log('🔍 searchTerm:', searchTerm);
     if (searchTerm) {
-        filteredEntries = optimizedSearch(searchTerm, filteredEntries);
+        const words = searchTerm.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+        filteredEntries = filteredEntries.filter(entry => {
+            const fields = [
+                entry.titulo,
+                entry.descripcion,
+                entry.tipo_nota,
+                entry.ubicacion,
+                entry.hora_inicio,
+                entry.hora_final,
+                entry.folio,
+                entry.profiles?.email,
+                entry.user_id
+            ].map(f => (f || '').toLowerCase()).join(' ');
+            return words.some(word => fields.includes(word));
+        });
         console.log('🔍 Después de search:', filteredEntries.length);
     }
 
@@ -2195,8 +2210,16 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
 let searchTimeout;
 function debouncedFilter() {
     clearTimeout(searchTimeout);
-    searchTimeout = setTimeout(filterAndDisplayEntries, 300);
+    searchTimeout = setTimeout(filterAndDisplayEntries, 200);
 }
+
+// Enter en búsqueda dispara filtro inmediato
+document.getElementById('searchInput')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        clearTimeout(searchTimeout);
+        filterAndDisplayEntries();
+    }
+});
 
 // Actualizar contador de entradas
 function updateEntriesCounter(entries) {
@@ -3828,8 +3851,8 @@ function initializeLazyLoading() {
 
 // Event listeners para filtros con debounce
 document.getElementById('searchInput')?.addEventListener('input', debouncedFilter);
-document.getElementById('tipoFilter')?.addEventListener('change', filterAndDisplayEntries);
-document.getElementById('ubicacionFilter')?.addEventListener('change', filterAndDisplayEntries);
+document.getElementById('tipoFilter')?.addEventListener('change', () => filterAndDisplayEntries());
+document.getElementById('ubicacionFilter')?.addEventListener('change', () => filterAndDisplayEntries());
 document.getElementById('fechaInicioFilter')?.addEventListener('change', () => {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(filterAndDisplayEntries, 500);
@@ -5947,10 +5970,11 @@ async function loadAllFilteredEntries() {
         const fechaInicioFilter = document.getElementById('fechaInicioFilter').value;
         const fechaFinalFilter = document.getElementById('fechaFinalFilter').value;
         
-        // Construir consulta base
+        // Construir consulta base (solo campos necesarios para reducir tamaño de respuesta)
         let query = supabaseClient
             .from('bitacora')
-            .select('*', { count: 'exact' })
+            .select('id, fecha, fecha_hora, titulo, descripcion, tipo_nota, ubicacion, user_id, folio, hora_inicio, hora_final', { count: 'exact' })
+            .limit(5000)
             .order('fecha', { ascending: false });
         
         // Aplicar filtros como en filterAndDisplayEntries
@@ -5978,10 +6002,20 @@ async function loadAllFilteredEntries() {
         }
         
         // Cargar TODAS las entradas sin límite de paginación
-        const { data: allData, error, count } = await query;
+        let allData, queryError, count;
+        try {
+            const result = await query;
+            allData = result.data;
+            queryError = result.error;
+            count = result.count;
+        } catch (e) {
+            console.error('Error en consulta Supabase:', e, e.stack);
+            showNotification('❌ Error al consultar base de datos: ' + (e.message || e), 'error');
+            return [];
+        }
         
-        if (error) {
-            console.error('Error cargando todas las entradas para PDF:', error);
+        if (queryError) {
+            console.error('Error cargando todas las entradas para PDF:', queryError);
             showNotification('❌ Error cargando datos para el PDF', 'error');
             return [];
         }
@@ -5993,25 +6027,29 @@ async function loadAllFilteredEntries() {
             const userIds = [...new Set(filteredEntries.map(entry => entry.user_id).filter(id => id))];
             
             if (userIds.length > 0) {
-                const { data: profiles, error: profilesError } = await supabaseClient
-                    .from('profiles')
-                    .select('id, email')
-                    .in('id', userIds);
-                
-                if (!profilesError && profiles) {
-                    const userEmails = {};
-                    profiles.forEach(profile => {
-                        if (profile.email) {
-                            userEmails[profile.id] = profile.email;
-                        }
-                    });
+                try {
+                    const { data: profiles, error: profilesError } = await supabaseClient
+                        .from('profiles')
+                        .select('id, email')
+                        .in('id', userIds);
                     
-                    // Asignar emails a las entradas
-                    filteredEntries.forEach(entry => {
-                        if (userEmails[entry.user_id]) {
-                            entry.profiles = { email: userEmails[entry.user_id] };
-                        }
-                    });
+                    if (!profilesError && profiles) {
+                        const userEmails = {};
+                        profiles.forEach(profile => {
+                            if (profile.email) {
+                                userEmails[profile.id] = profile.email;
+                            }
+                        });
+                        
+                        // Asignar emails a las entradas
+                        filteredEntries.forEach(entry => {
+                            if (userEmails[entry.user_id]) {
+                                entry.profiles = { email: userEmails[entry.user_id] };
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.warn('No se pudieron cargar perfiles de usuarios:', e.message);
                 }
             }
         }
@@ -6037,26 +6075,6 @@ async function loadAllFilteredEntries() {
         
         console.log(`📊 Cargadas ${filteredEntries.length} entradas para PDF de un total de ${count || 0}`);
         
-        // Obtener conteos de comentarios para todas las entradas
-        if (filteredEntries.length > 0) {
-            const { data: commentsData, error: commentsError } = await supabaseClient
-                .from('comentarios')
-                .select('bitacora_id, id')
-                .in('bitacora_id', filteredEntries.map(e => e.id));
-            
-            if (!commentsError && commentsData) {
-                const commentCounts = {};
-                commentsData.forEach(comment => {
-                    commentCounts[comment.bitacora_id] = (commentCounts[comment.bitacora_id] || 0) + 1;
-                });
-                
-                filteredEntries.forEach(entry => {
-                    entry.commentCount = commentCounts[entry.id] || 0;
-                    entry.isCommentsRead = true; // Marcamos como leídos para el PDF
-                });
-            }
-        }
-        
         return filteredEntries;
         
     } catch (error) {
@@ -6067,8 +6085,8 @@ async function loadAllFilteredEntries() {
 }
 
 // Función para generar PDF grande por lotes
-async function generateLargePDF(entries) {
-    showNotification(`📄 Generando PDF para ${entries.length} entradas (procesando por lotes)...`, 'info');
+async function generateLargePDF(entries, filtersText) {
+    showNotification(`📄 Generando PDF para ${entries.length} entradas...`, 'info');
     
     const batchSize = 100;
     const batches = Math.ceil(entries.length / batchSize);
@@ -6082,7 +6100,7 @@ async function generateLargePDF(entries) {
         showNotification(`📄 Procesando lote ${i + 1}/${batches} (${batch.length} entradas)...`, 'info');
         
         // Generar contenido del lote
-        const batchHtml = generateBatchHTML(batch, start + 1);
+        const batchHtml = generateBatchHTML(batch, start + 1, filtersText);
         
         // Crear una página por lote
         if (i > 0) {
@@ -6100,68 +6118,132 @@ async function generateLargePDF(entries) {
                 windowHeight: 800
             });
             
-            const imgData = canvas.toDataURL('image/png', 0.7);
-            pdf.addImage(imgData, 'PNG', 10, 10, 277, 190);
+            if (canvas && canvas.width > 0 && canvas.height > 0) {
+                const imgData = canvas.toDataURL('image/jpeg', 0.7);
+                if (imgData && imgData.startsWith('data:image/')) {
+                    pdf.addImage(imgData, 'JPEG', 10, 10, 277, 190);
+                } else {
+                    console.warn('Imagen de lote inválida generada');
+                }
+            } else {
+                console.warn('Canvas inválido generado para lote:', i + 1);
+            }
             
         } catch (error) {
             console.error('Error en lote', i + 1, ':', error);
-            // Continuar con el siguiente lote
         }
         
-        // Pequeña pausa para no sobrecargar el navegador
         await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    // Descargar el PDF
-    const fileName = `bitacora_${new Date().toISOString().split('T')[0]}_lote.pdf`;
+    const fileName = `bitacora_${new Date().toISOString().split('T')[0]}.pdf`;
     pdf.save(fileName);
     
-    showNotification(`✅ PDF generado con ${entries.length} entradas en ${batches} lotes`, 'success');
+    showNotification(`✅ PDF generado con ${entries.length} entradas`, 'success');
 }
 
 // Función para generar HTML de un lote
-function generateBatchHTML(entries, startNumber) {
+function generateBatchHTML(entries, startNumber, filtersText) {
+    const headerHtml = filtersText ? `
+        <div style="margin-bottom: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 12px; width: 100%; box-sizing: border-box; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);">
+            <div style="text-align: center; color: #ffffff; font-size: 18px; font-weight: bold; margin-bottom: 8px;">
+                📋 BITÁCORA DE OBRA
+            </div>
+            <div style="text-align: center; color: #f8f9fa; font-size: 11px; margin-bottom: 4px;">
+                👤 ${currentUser?.email || 'Usuario desconocido'} | 📊 ${entries.length} entradas
+            </div>
+            <div style="text-align: center; color: #e8eaf6; font-size: 9px; margin-bottom: 4px;">
+                🔍 ${filtersText}
+            </div>
+            <div style="text-align: center; color: #c5cae9; font-size: 8px;">
+                🕐 ${new Date().toLocaleString('es-CO')}
+            </div>
+        </div>
+    ` : '';
+    
+    function formatDate(fechaUsar) {
+        if (!fechaUsar) return '';
+        if (fechaUsar.includes('T')) {
+            const [datePart, timePart] = fechaUsar.split('T');
+            const [year, month, day] = datePart.split('-');
+            const [hours, minutes] = timePart.split(':');
+            return `${day}/${month}/${year} ${hours}:${minutes}`;
+        } else {
+            const [year, month, day] = fechaUsar.split('-');
+            return `${day}/${month}/${year}`;
+        }
+    }
+    
     const html = `
-        <div style="font-family: Arial; padding: 20px; background: white;">
-            <h2 style="color: #2c3e50; margin-bottom: 20px; text-align: center;">
-                📋 BITÁCORA DE OBRA - REPORTE ACTUALIZADO (Lote)
-            </h2>
-            <table style="width: 100%; border-collapse: collapse; font-size: 8px; table-layout: fixed;">
-                <thead>
-                    <tr style="background: #1976d2; color: white;">
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 4%;">#</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 8%;">Fecha</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 18%;">Título</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 32%;">Descripción</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 5%;">Tipo</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 10%;">Ubicación</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 10%;">Usuario</th>
-                        <th style="border: 1px solid #ddd; padding: 4px; width: 13%;">Comentarios</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${entries.map((entry, index) => {
-                        const userEmail = entry.profiles?.email || entry.user_id || 'Usuario';
-                        let comentariosTexto = 'Sin comentarios';
-                        if (entry.comments && entry.comments.length > 0) {
-                            comentariosTexto = entry.comments.map(c => c.comentario).join(' | ');
-                        }
-
-                        return `
-                        <tr style="${index % 2 === 0 ? 'background: #f9f9f9;' : ''}">
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; text-align: center;">${entry.folio || startNumber + index}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top;">${formatearFechaLocal(entry.fecha_hora || entry.fecha)}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; font-weight: bold;">${entry.titulo || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; background-color: #e3f2fd;">${entry.descripcion || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; text-align: center;">${entry.tipo_nota || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top;">${entry.ubicacion || ''}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; font-size: 7px;">${userEmail}</td>
-                            <td style="border: 1px solid #ddd; padding: 4px; vertical-align: top; font-size: 7px;">${comentariosTexto}</td>
+        <div style="font-family: Arial, Helvetica, sans-serif; padding: 20px; background: white; width: 1160px;">
+            ${headerHtml}
+            <div style="margin-bottom: 10px; width: 100%; box-sizing: border-box;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 7px; table-layout: fixed; background-color: white;">
+                    <thead>
+                        <tr style="background: #2e7d32; color: white; height: 18px;">
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 15%; font-weight: bold;">Título</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 35%; font-weight: bold;">Descripción</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 5%; font-weight: bold;">Tipo</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 10%; font-weight: bold;">Ubicación</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 10%; font-weight: bold;">Usuario</th>
+                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 13%; font-weight: bold;">Comentarios</th>
                         </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        ${(() => {
+                            try {
+                                return entries.map((entry, index) => {
+                                    const userEmail = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
+                                    
+                                    // Formatear comentarios completos con autor y fecha
+                                    let comentariosTexto = 'Sin comentarios';
+                                    if (entry.comments && entry.comments.length > 0) {
+                                        try {
+                                            comentariosTexto = entry.comments.map((comment, ci) => {
+                                                const commentDate = new Date(comment.created_at).toLocaleString('es-CO', {
+                                                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+                                                });
+                                                const author = comment.profiles?.email || 'Usuario';
+                                                return `${ci + 1}. [${commentDate}] ${author}: ${comment.comentario}`;
+                                            }).join(' | ');
+                                            if (comentariosTexto.length > 50000) {
+                                                comentariosTexto = comentariosTexto.substring(0, 50000) + '...';
+                                            }
+                                        } catch (e) {
+                                            console.warn('Error formateando comentarios:', e);
+                                            comentariosTexto = '[Error al cargar comentarios]';
+                                        }
+                                    }
+                                    
+                                    const rowColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+                                    const fechaFormateada = formatDate(entry.fecha_hora || entry.fecha);
+                                    const titulo = entry.titulo || '';
+                                    const descripcion = entry.descripcion || '';
+                                    const ubicacion = entry.ubicacion || '';
+                                    
+                                    return `
+                                    <tr style="font-size: 7px; background-color: ${rowColor};">
+                                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; font-weight: bold; color: #000000; vertical-align: top;">${entry.folio || startNumber + index}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; color: #000000; vertical-align: top;">${fechaFormateada}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; font-weight: bold; vertical-align: top;">${titulo}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 3px; text-align: justify; word-wrap: break-word; color: #000000; vertical-align: top; line-height: 1.2; background-color: #e3f2fd;">${descripcion}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; color: #000000; vertical-align: top;">${entry.tipo_nota || '-'}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top;">${ubicacion}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top; font-size: 6px;">${userEmail}</td>
+                                        <td style="border: 1px solid #bbdefb; padding: 3px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top; font-size: 6px; line-height: 1.1;">${comentariosTexto}</td>
+                                    </tr>
+                                    `;
+                                }).join('');
+                            } catch (e) {
+                                console.error('Error al generar filas del PDF:', e);
+                                return '<tr><td colspan="8" style="color: red; padding: 10px;">Error al generar contenido</td></tr>';
+                            }
+                        })()}
+                    </tbody>
+                </table>
+            </div>
         </div>
     `;
     
@@ -6172,9 +6254,24 @@ function generateBatchHTML(entries, startNumber) {
 
 // Función para descargar PDF
 async function downloadPDF() {
+    console.log('[PDF Debug] 1. Click en Descargar PDF detectado.');
+    
+    // Función auxiliar para escapar caracteres HTML peligrosos y evitar que rompan la tabla
+    const escapeHTML = (str) => {
+        if (str === null || str === undefined) return '';
+        return str
+            .toString()
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    };
+
     // Iniciando descarga de reporte detallado
     // Verificar que las librerías necesarias estén cargadas
     if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined' || !window.jspdf.jsPDF) {
+        console.error('[PDF Debug] Error: Librerías jsPDF o html2canvas no están cargadas en el entorno.');
         showNotification('❌ Error: Las librerías para generar PDF no están disponibles', 'error');
         return;
     }
@@ -6186,131 +6283,44 @@ async function downloadPDF() {
     const fechaInicioFilter = document.getElementById('fechaInicioFilter').value;
     const fechaFinalFilter = document.getElementById('fechaFinalFilter').value;
     
+    console.log('[PDF Debug] 2. Filtros leídos:', { searchTerm, tipoFilter, ubicacionFilter, fechaInicioFilter, fechaFinalFilter });
+
     if (!searchTerm && !tipoFilter && !ubicacionFilter && !fechaInicioFilter && !fechaFinalFilter) {
+        console.warn('[PDF Debug] Advertencia: Intento de descarga sin aplicar ningún filtro.');
         showNotification('⚠️ Para descargar el PDF, debes aplicar al menos un filtro de búsqueda, tipo de nota, ubicación o rango de fechas', 'warning');
         return;
     }
     
     try {
         // Mostrar indicador de carga
-        showNotification('📄 Generando PDF... (cargando todas las entradas filtradas)', 'info');
+        showNotification('📄 Iniciando generación de PDF... cargando entradas', 'info');
         
         // Obtener TODAS las entradas filtradas de la base de datos
-        let filteredEntries = await loadAllFilteredEntries();
-        
-        // Si hay muchas entradas, procesar por lotes
-        if (filteredEntries.length > 200) {
-            return await generateLargePDF(filteredEntries);
-        }
-        
-        if (tipoFilter) {
-            filteredEntries = filteredEntries.filter(entry => entry.tipo_nota === tipoFilter);
-        }
-        
-        if (ubicacionFilter) {
-            filteredEntries = filteredEntries.filter(entry => entry.ubicacion === ubicacionFilter);
-        }
-        
-        // Filtrar por rango de fechas (mismo código que filterAndDisplayEntries)
-        if (fechaInicioFilter && fechaFinalFilter) {
-            filteredEntries = filteredEntries.filter(entry => {
-                // Debug: console.log('Entrada fecha:', entry.fecha, 'Tipo:', typeof entry.fecha);
-                const entryDate = new Date(entry.fecha || entry.fecha_hora);
-                const fechaInicio = new Date(fechaInicioFilter);
-                const fechaFinal = new Date(fechaFinalFilter);
-                
-                // Extraer componentes de fecha directamente del string para evitar problemas de timezone
-                const entryDateString = (entry.fecha || entry.fecha_hora).split('T')[0];
-                const entryDateOnly = new Date(entryDateString + 'T00:00:00');
-                const fechaInicioOnly = new Date(fechaInicioFilter + 'T00:00:00');
-                const fechaFinalOnly = new Date(fechaFinalFilter + 'T23:59:59');
-                
-                // Debug: console.log('Comparación:', entryDateOnly.toISOString(), '>=', fechaInicioOnly.toISOString(), '&& <=', fechaFinalOnly.toISOString());
-                
-                return entryDateOnly >= fechaInicioOnly && entryDateOnly <= fechaFinalOnly;
-            });
-        } else if (fechaInicioFilter) {
-            // Si solo hay fecha de inicio, filtrar desde esa fecha en adelante
-            filteredEntries = filteredEntries.filter(entry => {
-                const entryDate = new Date(entry.fecha || entry.fecha_hora);
-                const fechaInicio = new Date(fechaInicioFilter);
-                // Normalizar fechas para comparar solo el día
-                const entryDateOnly = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
-                const fechaInicioOnly = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate());
-                return entryDateOnly >= fechaInicioOnly;
-            });
-        } else if (fechaFinalFilter) {
-            // Si solo hay fecha final, filtrar hasta esa fecha (incluyendo todo el día)
-            filteredEntries = filteredEntries.filter(entry => {
-                const entryDate = new Date(entry.fecha || entry.fecha_hora);
-                const fechaFinal = new Date(fechaFinalFilter);
-                // Normalizar fechas para comparar solo el día
-                const entryDateOnly = new Date(entryDate.getFullYear(), entryDate.getMonth(), entryDate.getDate());
-                const fechaFinalOnly = new Date(fechaFinal.getFullYear(), fechaFinal.getMonth(), fechaFinal.getDate());
-                return entryDateOnly <= fechaFinalOnly;
-            });
-        }
-        
-
-        
-        if (tipoFilter) {
-            filteredEntries = filteredEntries.filter(entry => entry.tipo_nota === tipoFilter);
-        }
-        
-        if (filteredEntries.length === 0) {
-            showNotification('❌ No hay entradas para generar PDF', 'error');
+        console.log('[PDF Debug] 3. Solicitando entradas filtradas a loadAllFilteredEntries...');
+        let filteredEntries;
+        try {
+            filteredEntries = await loadAllFilteredEntries();
+            console.log(`[PDF Debug] 4. Entradas cargadas con éxito. Total: ${filteredEntries ? filteredEntries.length : 0} registros.`);
+        } catch (e) {
+            console.error('[PDF Debug] Error en loadAllFilteredEntries:', e, e.stack);
+            showNotification('❌ Error cargando datos de bitácora: ' + (e.message || e), 'error');
             return;
         }
         
-        // Pre-cargar todos los comentarios para las entradas filtradas
-        const entriesWithComments = await Promise.all(
-            filteredEntries.map(async (entry) => {
-                try {
-                    // Cargar comentarios de esta entrada
-                    const { data: comments, error } = await supabaseClient
-                        .from('comentarios')
-                        .select('*')
-                        .eq('bitacora_id', entry.id)
-                        .order('created_at', { ascending: true });
-                    
-                    if (error) {
-                        console.warn(`Error cargando comentarios para entrada ${entry.id}:`, error);
-                        return { ...entry, comments: [] };
-                    }
-                    
-                    if (!comments || comments.length === 0) {
-                        return { ...entry, comments: [] };
-                    }
-                    
-                    // Obtener todos los IDs de usuarios únicos de los comentarios
-                    const userIds = [...new Set(comments.map(c => c.user_id))];
-                    
-                    // Cargar perfiles de esos usuarios
-                    const { data: profiles, error: profilesError } = await supabaseClient
-                        .from('profiles')
-                        .select('id, email')
-                        .in('id', userIds);
-                    
-                    if (profilesError) {
-                        console.warn(`Error cargando perfiles para comentarios de entrada ${entry.id}:`, profilesError);
-                        // Usar comentarios sin perfiles
-                        return { ...entry, comments: comments || [] };
-                    }
-                    
-                    // Combinar comentarios con sus perfiles
-                    const commentsWithProfiles = comments.map(comment => ({
-                        ...comment,
-                        profiles: profiles.find(p => p.id === comment.user_id) || null
-                    }));
-                    
-                    return { ...entry, comments: commentsWithProfiles };
-                    
-                } catch (error) {
-                    console.warn(`Error inesperado cargando comentarios para entrada ${entry.id}:`, error);
-                    return { ...entry, comments: [] };
-                }
-            })
-        );
+        // Re-aplicar filtros de tipo y ubicación en JavaScript como respaldo
+        if (filteredEntries && filteredEntries.length > 0) {
+            console.log('[PDF Debug] Re-aplicando filtros JS - tipoFilter:', tipoFilter, 'ubicacionFilter:', ubicacionFilter);
+            if (tipoFilter) {
+                const before = filteredEntries.length;
+                filteredEntries = filteredEntries.filter(entry => entry.tipo_nota === tipoFilter);
+                console.log(`[PDF Debug] Filtro tipo: ${before} → ${filteredEntries.length} entradas`);
+            }
+            if (ubicacionFilter) {
+                const before = filteredEntries.length;
+                filteredEntries = filteredEntries.filter(entry => entry.ubicacion === ubicacionFilter);
+                console.log(`[PDF Debug] Filtro ubicación: ${before} → ${filteredEntries.length} entradas`);
+            }
+        }
         
         // Crear texto de filtros
         const filtersInfo = [];
@@ -6325,149 +6335,16 @@ async function downloadPDF() {
             filtersInfo.push(`Hasta: ${new Date(fechaFinalFilter).toLocaleDateString('es-ES')}`);
         }
         const filtersText = filtersInfo.length > 0 ? filtersInfo.join(' | ') : 'Todos los registros';
-
-        // Crear un contenedor temporal para el PDF con altura suficiente para evitar cortes
-        let pdfContainer = document.createElement('div');
-        pdfContainer.style.cssText = `
-            position: fixed;
-            top: -9999px;
-            left: -9999px;
-            width: 210mm;
-            background: white;
-            padding: 10mm;
-            font-family: Arial, sans-serif;
-            font-size: 11px;
-            line-height: 1.3;
-            box-sizing: border-box;
-            page-break-inside: avoid;
-            z-index: -9999;
-        `;
-
-        document.body.appendChild(pdfContainer);
         
-        // Crear HTML para el PDF (método original con todas las entradas)
-        let pdfHTML = `
-            <div style="margin-bottom: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px; border-radius: 12px; width: calc(100% - 6px); box-sizing: border-box; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);">
-                <div style="text-align: center; color: #ffffff; font-size: 18px; font-weight: bold; margin-bottom: 8px;">
-                    📋 BITÁCORA DE OBRA
-                </div>
-                <div style="text-align: center; color: #f8f9fa; font-size: 11px; margin-bottom: 4px;">
-                    👤 ${currentUser?.email || 'Usuario desconocido'} | 📊 ${entriesWithComments.length} entradas
-                </div>
-                <div style="text-align: center; color: #e8eaf6; font-size: 9px; margin-bottom: 4px;">
-                    🔍 ${filtersText}
-                </div>
-                <div style="text-align: center; color: #c5cae9; font-size: 8px;">
-                    🕐 ${new Date().toLocaleString('es-CO')}
-                </div>
-            </div>
-            <div style="margin-bottom: 10px; width: calc(100% - 6px); box-sizing: border-box;">
-                <table class="pdf-export-table" style="width: 100%; max-width: 100%; border-collapse: collapse; font-size: 7px; table-layout: auto; margin: 0 auto; page-break-inside: auto; background-color: white;">
-                    <thead>
-                        <tr style="background-color: #2e7d32; color: white; height: 18px;">
-                            <th style="border: 1px solid #1b5e20; padding: 2px; text-align: center; width: 4%; font-weight: bold;">Folio</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 8%; font-weight: bold;">Fecha y Hora</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 15%; font-weight: bold;">Título</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 35%; font-weight: bold;">Descripción</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 5%; font-weight: bold;">Tipo</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 10%; font-weight: bold;">Ubicación</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 10%; font-weight: bold;">Usuario</th>
-                            <th style="border: 1px solid #0d47a1; padding: 2px; text-align: center; width: 13%; font-weight: bold;">Comentarios</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        
-        // Agregar filas de datos
-        entriesWithComments.forEach((entry, entryIndex) => {
-            const fechaUsar = entry.fecha_hora || entry.fecha;
-            let fechaFormateada = '';
-            
-            if (fechaUsar.includes('T')) {
-                const [datePart, timePart] = fechaUsar.split('T');
-                const [year, month, day] = datePart.split('-');
-                const [hours, minutes] = timePart.split(':');
-                fechaFormateada = `${day}/${month}/${year} ${hours}:${minutes}`;
-            } else {
-                const [year, month, day] = fechaUsar.split('-');
-                fechaFormateada = `${day}/${month}/${year}`;
-            }
-            
-                // Textos completos sin truncar
-                const titulo = entry.titulo || '';
-                const descripcion = entry.descripcion || '';
-                const userEmail = (entry.profiles?.email || entry.user_id || 'Usuario desconocido'); 
-                
-                // Formatear comentarios para mostrar en el PDF (completos)
-                let comentariosTexto = '';
-                if (entry.comments && entry.comments.length > 0) {
-                    comentariosTexto = entry.comments.map((comment, index) => {
-                        const commentDate = new Date(comment.created_at).toLocaleString('es-CO', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: false
-                        });
-                        const author = comment.profiles?.email || `Usuario ${comment.user_id}`;
-                        return `${index + 1}. [${commentDate}] ${author}: ${comment.comentario}`;
-                    }).join(' | ');
-                } else {
-                    comentariosTexto = 'Sin comentarios';
-                }
-                
-                const rowColor = entryIndex % 2 === 0 ? '#ffffff' : '#f8f9fa';
-                const ubicacion = entry.ubicacion || '';
-            pdfHTML += `
-                <tr style="font-size: 7px; background-color: ${rowColor}; page-break-inside: auto;">
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; font-weight: bold; color: #000000; vertical-align: top;">${entry.folio || '-'}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; color: #000000; vertical-align: top;">${fechaFormateada}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; font-weight: bold; vertical-align: top;">${titulo}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 3px; text-align: justify; word-wrap: break-word; color: #000000; vertical-align: top; line-height: 1.2; background-color: #e3f2fd;">${descripcion}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: center; word-wrap: break-word; color: #000000; vertical-align: top;">${entry.tipo_nota || '-'}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top;">${ubicacion}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 2px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top; font-size: 6px;">${userEmail}</td>
-                    <td style="border: 1px solid #bbdefb; padding: 3px; text-align: left; word-wrap: break-word; color: #000000; vertical-align: top; font-size: 6px; line-height: 1.1;">${comentariosTexto}</td>
-                </tr>
-            `;
-        });
-        
-        pdfHTML += `
-                    </tbody>
-                </table>
-            </div>
-            <div style="margin-top: 15px; text-align: center; color: #000000; font-size: 9px; clear: both;">
-                <hr style="border: 1px solid #90caf9; margin: 5px 0;">
-                Bitácora de Obra - Sistema de Registro Digital
-            </div>
-        `;
-        
-        console.log('🔍 Debug PDF - HTML generado, length:', pdfHTML.length);
-        console.log('🔍 Debug PDF - entriesWithComments length:', entriesWithComments.length);
-        
-        pdfContainer.innerHTML = pdfHTML;
-        
-        console.log('🔍 Debug PDF - Container HTML asignado');
-        
-        // Esperar a que se renderice el contenido
-        await new Promise(resolve => setTimeout(resolve, 3000));
-        
-        console.log('🔍 Debug PDF - Después de renderizar');
-        console.log('🔍 Debug PDF - Container scrollWidth actual:', pdfContainer.scrollWidth);
-        console.log('🔍 Debug PDF - Container scrollHeight actual:', pdfContainer.scrollHeight);
-        console.log('🔍 Debug PDF - Container innerHTML length:', pdfContainer.innerHTML.length);
-
-        console.log('🔍 Debug PDF - Después de esperar');
-        console.log('🔍 Debug PDF - Container existe:', !!pdfContainer);
-        console.log('🔍 Debug PDF - Container en DOM:', !!pdfContainer.parentNode);
-
-        if (!pdfContainer || !pdfContainer.parentNode) {
-            console.error('❌ Error: Container no existe o no está en el DOM');
-            showNotification('❌ Error: No se pudo generar el contenedor del PDF', 'error');
+        if (!filteredEntries || filteredEntries.length === 0) {
+            console.warn('[PDF Debug] Advertencia: No hay registros que coincidan con los filtros.');
+            showNotification('❌ No hay entradas para generar PDF con los filtros actuales', 'error');
             return;
         }
-
-        // Crear PDF
+        
+        // Generar PDF con jsPDF texto + html2canvas por fila (método que se ve bien)
+        showNotification(`📄 Preparando PDF para ${filteredEntries.length} entradas...`, 'info');
+        
         const pdf = new window.jspdf.jsPDF('p', 'mm', 'a4');
         const pageWidth = 210;
         const pageHeight = 297;
@@ -6478,14 +6355,67 @@ async function downloadPDF() {
         const usableWidth = pageWidth - marginLeft - marginRight;
         const usableHeight = pageHeight - marginTop - marginBottom;
 
+        // Cargar perfiles de usuario al inicio para mapear emails rápidamente en memoria
+        console.log('[PDF Debug] 5. Cargando perfiles de usuario de Supabase...');
+        const profilesMap = {};
+        try {
+            const { data: allProfiles, error: profilesErr } = await supabaseClient
+                .from('profiles')
+                .select('id, email');
+            if (profilesErr) {
+                console.error('[PDF Debug] Error de Supabase al cargar perfiles:', profilesErr);
+            }
+            if (allProfiles) {
+                allProfiles.forEach(p => {
+                    if (p.id && p.email) {
+                        profilesMap[p.id] = p.email;
+                    }
+                });
+                console.log(`[PDF Debug] Perfiles mapeados con éxito: ${Object.keys(profilesMap).length} perfiles.`);
+            }
+        } catch (profileErr) {
+            console.warn('[PDF Debug] No se pudieron cargar perfiles de usuario para comentarios:', profileErr);
+        }
+
+        // Cargar todos los comentarios de las entradas filtradas de una sola vez
+        console.log('[PDF Debug] 6. Cargando todos los comentarios en lote...');
+        const commentsByEntry = {};
+        const entryIds = filteredEntries.map(e => e.id).filter(id => id);
+        
+        if (entryIds.length > 0) {
+            try {
+                const { data: allComments, error: commentsErr } = await supabaseClient
+                    .from('comentarios')
+                    .select('*')
+                    .in('bitacora_id', entryIds)
+                    .order('created_at', { ascending: true });
+                
+                if (commentsErr) {
+                    console.error('[PDF Debug] Error de Supabase al cargar comentarios en lote:', commentsErr);
+                }
+                if (allComments) {
+                    allComments.forEach(c => {
+                        if (!commentsByEntry[c.bitacora_id]) {
+                            commentsByEntry[c.bitacora_id] = [];
+                        }
+                        commentsByEntry[c.bitacora_id].push(c);
+                    });
+                    console.log(`[PDF Debug] Comentarios cargados y mapeados con éxito en memoria.`);
+                }
+            } catch (commentsQueryErr) {
+                console.warn('[PDF Debug] Error de consulta al cargar todos los comentarios del lote:', commentsQueryErr);
+            }
+        }
+
         // Estilos y anchos de columnas (Ajustados según solicitud)
         const colWidths = {
             folio: usableWidth * 0.04,
-            fecha: usableWidth * 0.08,
-            titulo: usableWidth * 0.10,
-            desc: usableWidth * 0.60, // Aumentado al 60%
+            fecha: usableWidth * 0.09,
+            titulo: usableWidth * 0.12,
+            desc: usableWidth * 0.50,
             tipo: usableWidth * 0.05,
-            ubica: usableWidth * 0.06,
+            ubica: usableWidth * 0.07,
+            usuario: usableWidth * 0.06,
             coment: usableWidth * 0.07
         };
 
@@ -6508,7 +6438,7 @@ async function downloadPDF() {
             
             pdf.setFontSize(8);
             pdf.setFont('helvetica', 'normal');
-            pdf.text(`Usuario: ${currentUser?.email || 'Admin'} | Total: ${entriesWithComments.length} entradas`, marginLeft + 5, marginTop + 18);
+            pdf.text(`Usuario: ${currentUser?.email || 'Admin'} | Total: ${filteredEntries.length} entradas`, marginLeft + 5, marginTop + 18);
             pdf.text(`Filtros: ${filtersText}`, marginLeft + 5, marginTop + 22);
             pdf.text(`Página ${pageNum}`, pageWidth - marginRight - 15, marginTop + 22);
             
@@ -6528,6 +6458,7 @@ async function downloadPDF() {
             pdf.text('Descripción', x + colWidths.desc/2, currentY + 5, { align: 'center' }); x += colWidths.desc;
             pdf.text('Tipo', x + colWidths.tipo/2, currentY + 5, { align: 'center' }); x += colWidths.tipo;
             pdf.text('Ubicación', x + colWidths.ubica/2, currentY + 5, { align: 'center' }); x += colWidths.ubica;
+            pdf.text('Usuario', x + colWidths.usuario/2, currentY + 5, { align: 'center' }); x += colWidths.usuario;
             pdf.text('Comentarios', x + colWidths.coment/2, currentY + 5, { align: 'center' });
             
             currentY += 8;
@@ -6535,43 +6466,120 @@ async function downloadPDF() {
 
         drawHeader(currentPage);
 
-        // Contenedor para renderizar filas individuales
+        // Contenedor para renderizar filas individuales (Colocado fuera de la pantalla con opacidad completa para html2canvas)
         const rowMeasure = document.createElement('div');
-        rowMeasure.style.cssText = `position: fixed; top: -9999px; width: ${usableWidth}mm; font-family: Arial; font-size: 7px;`;
+        rowMeasure.style.cssText = `position: absolute; left: -9999px; top: -9999px; width: ${usableWidth}mm; font-family: Arial; font-size: 7px;`;
         document.body.appendChild(rowMeasure);
 
-        for (const entry of entriesWithComments) {
-            const fecha = (entry.fecha_hora || entry.fecha).split('T')[0].split('-').reverse().join('/');
-            const comentarios = entry.comments?.length > 0 
-                ? entry.comments.map(c => `• ${c.comentario}`).join('<br>') 
-                : 'Sin comentarios';
+        console.log('[PDF Debug] 7. Procesando filas individualmente en bucle...');
+        let processedCount = 0;
 
-            // HTML de la fila para medir
+        for (const entry of filteredEntries) {
+            processedCount++;
+            console.log(`[PDF Debug] Procesando fila ${processedCount}/${filteredEntries.length} (Folio: ${entry.folio || '-'})...`);
+            
+            let fecha = '-';
+            try {
+                const rawFecha = entry.fecha_hora || entry.fecha;
+                if (rawFecha) {
+                    if (rawFecha.includes('T')) {
+                        const parts = rawFecha.split('T');
+                        const datePart = parts[0].split('-').reverse().join('/');
+                        const timePart = parts[1].split(':');
+                        const hours = timePart[0];
+                        const minutes = timePart[1] || '00';
+                        fecha = `${datePart} ${hours}:${minutes}`;
+                    } else {
+                        fecha = rawFecha.split('-').reverse().join('/');
+                    }
+                }
+            } catch (fechaErr) {
+                console.warn('[PDF Debug] Error al formatear fecha de entrada:', entry.id, fechaErr);
+            }
+            
+            // Obtener comentarios de nuestro mapa en memoria
+            let comentarios = 'Sin comentarios';
+            const entryComments = commentsByEntry[entry.id];
+            
+            if (entryComments && entryComments.length > 0) {
+                comentarios = entryComments.map(c => {
+                    const authorEmail = profilesMap[c.user_id] || c.user_id || 'Usuario';
+                    const author = escapeHTML(authorEmail);
+                    const comentarioEscapado = escapeHTML(c.comentario || '');
+                    return `• [${author}] ${comentarioEscapado}`;
+                }).join('<br>');
+                if (comentarios.length > 10000) comentarios = comentarios.substring(0, 10000) + '...';
+            }
+            
+            const titulo = entry.titulo || '';
+            const descripcion = entry.descripcion || '';
+            const ubicacion = entry.ubicacion || '';
+            const usuario = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
+
+            // HTML de la fila para medir con escapar de variables y tamaños de fuente unificados
             rowMeasure.innerHTML = `
                 <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
                     <tr>
-                        <td style="width: 4%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top;">${entry.folio || '-'}</td>
-                        <td style="width: 8%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top;">${fecha}</td>
-                        <td style="width: 10%; border: 0.1pt solid #bfdbfe; padding: 2px; font-weight: bold; vertical-align: top;">${entry.titulo || ''}</td>
-                        <td id="desc-cell" style="width: 60%; border: 0.1pt solid #bfdbfe; padding: 3px; text-align: justify; vertical-align: top; background: #f8fafc;">${entry.descripcion || ''}</td>
-                        <td style="width: 5%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top;">${entry.tipo_nota || ''}</td>
-                        <td style="width: 6%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top;">${entry.ubicacion || ''}</td>
-                        <td style="width: 7%; border: 0.1pt solid #bfdbfe; padding: 2px; font-size: 5.5px; vertical-align: top;">${comentarios}</td>
+                        <td style="width: 4%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(entry.folio || '-')}</td>
+                        <td style="width: 9%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(fecha)}</td>
+                        <td style="width: 12%; border: 0.1pt solid #bfdbfe; padding: 2px; font-weight: bold; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(titulo)}</td>
+                        <td id="desc-cell" style="width: 50%; border: 0.1pt solid #bfdbfe; padding: 3px; text-align: justify; vertical-align: top; background: #f8fafc; word-wrap: break-word; word-break: break-all;">${escapeHTML(descripcion)}</td>
+                        <td style="width: 5%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(entry.tipo_nota || '')}</td>
+                        <td style="width: 7%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(ubicacion)}</td>
+                        <td style="width: 6%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(usuario)}</td>
+                        <td style="width: 7%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top; word-wrap: break-word; word-break: break-all;">${comentarios}</td>
                     </tr>
                 </table>
             `;
 
-            const canvas = await html2canvas(rowMeasure, { scale: 3, useCORS: true });
-            const rowHeightMM = (canvas.height * usableWidth) / canvas.width;
+            let canvas;
+            try {
+                // Implementar Timeout en html2canvas con Promise.race para evitar que se quede colgado eternamente
+                canvas = await Promise.race([
+                    html2canvas(rowMeasure, { 
+                        scale: 2, 
+                        useCORS: true, 
+                        logging: false,
+                        allowTaint: true
+                    }),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout al renderizar html2canvas (3 segundos)')), 3000))
+                ]);
+            } catch (canvasErr) {
+                console.error(`[PDF Debug] Error/Timeout en html2canvas para folio ${entry.folio || '-'}:`, canvasErr);
+            }
+
+            // Validación de canvas nulo o vacío
+            if (!canvas || canvas.width === 0 || canvas.height === 0) {
+                console.warn('[PDF Debug] Canvas inválido o vacío generado para la entrada:', entry.id);
+                // Creamos un canvas por defecto para que no rompa la generación
+                canvas = document.createElement('canvas');
+                canvas.width = 300;
+                canvas.height = 30;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, 300, 30);
+                ctx.fillStyle = '#FF0000';
+                ctx.font = '10px Arial';
+                ctx.fillText(`Error de renderizado visual (Folio ${entry.folio || '-'})`, 10, 20);
+            }
+
+            // Evitar división por cero
+            const rowHeightMM = (canvas.width > 0) ? ((canvas.height * usableWidth) / canvas.width) : 10;
 
             // ¿Cabe la fila entera en el espacio que queda de la hoja?
             if (currentY + rowHeightMM > (pageHeight - marginBottom)) {
-                // Si la fila es más alta que una hoja entera (caso extremo) o si ya no hay espacio
-                // Vamos a "rebanar" el canvas de la fila
+                // Si la fila es más alta que una hoja entera o no cabe
                 let remainingRowHeight = rowHeightMM;
                 let canvasOffset = 0;
+                let loopCount = 0;
 
                 while (remainingRowHeight > 0) {
+                    loopCount++;
+                    if (loopCount > 50) {
+                        console.error('[PDF Debug] Bucle infinito evitado en división de página para fila:', entry.folio);
+                        break;
+                    }
+
                     const spaceLeft = (pageHeight - marginBottom) - currentY;
                     
                     // Si el espacio que queda es muy pequeño, saltar página
@@ -6585,6 +6593,14 @@ async function downloadPDF() {
                     // Cuánto de la fila podemos meter en esta página
                     const heightToDraw = Math.min(remainingRowHeight, spaceLeft);
                     
+                    if (heightToDraw <= 0) {
+                        pdf.addPage();
+                        currentPage++;
+                        drawHeader(currentPage);
+                        currentY = marginTop + 30;
+                        continue;
+                    }
+                    
                     // Ratio para el corte del canvas
                     const sourceY = (canvasOffset * canvas.height) / rowHeightMM;
                     const sourceHeight = (heightToDraw * canvas.height) / rowHeightMM;
@@ -6592,11 +6608,27 @@ async function downloadPDF() {
                     // Crear un canvas temporal para el trozo
                     const tempCanvas = document.createElement('canvas');
                     tempCanvas.width = canvas.width;
-                    tempCanvas.height = sourceHeight;
+                    tempCanvas.height = Math.max(1, Math.floor(sourceHeight));
                     const ctx = tempCanvas.getContext('2d');
-                    ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+                    
+                    // Fondo blanco opaco
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                    
+                    try {
+                        ctx.drawImage(
+                            canvas, 
+                            0, Math.floor(sourceY), canvas.width, Math.max(1, Math.floor(sourceHeight)), 
+                            0, 0, tempCanvas.width, tempCanvas.height
+                        );
+                    } catch (drawErr) {
+                        console.error('[PDF Debug] Error al dibujar segmento de canvas:', drawErr);
+                    }
 
-                    pdf.addImage(tempCanvas.toDataURL('image/png'), 'PNG', marginLeft, currentY, usableWidth, heightToDraw);
+                    const imgData = tempCanvas.toDataURL('image/jpeg', 0.85);
+                    if (imgData && imgData.startsWith('data:image/')) {
+                        pdf.addImage(imgData, 'JPEG', marginLeft, currentY, usableWidth, heightToDraw);
+                    }
 
                     remainingRowHeight -= heightToDraw;
                     canvasOffset += heightToDraw;
@@ -6611,76 +6643,59 @@ async function downloadPDF() {
                 }
             } else {
                 // Cabe perfectamente
-                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', marginLeft, currentY, usableWidth, rowHeightMM);
+                const imgData = canvas.toDataURL('image/jpeg', 0.85);
+                if (imgData && imgData.startsWith('data:image/')) {
+                    pdf.addImage(imgData, 'JPEG', marginLeft, currentY, usableWidth, rowHeightMM);
+                }
                 currentY += rowHeightMM;
             }
         }
 
         document.body.removeChild(rowMeasure);
-        if (pdfContainer && pdfContainer.parentNode) document.body.removeChild(pdfContainer);
+        console.log('[PDF Debug] 8. Procesamiento de filas finalizado. Guardando archivo...');
 
-        
         // Generar nombre de archivo con fecha
         const fechaArchivo = new Date().toISOString().split('T')[0];
         const nombreArchivo = `bitacora_${fechaArchivo}.pdf`;
         
         // Descargar el PDF
         try {
-            // Guardar directamente
+            console.log('[PDF Debug] Intentando pdf.save()...');
             pdf.save(nombreArchivo);
             console.log('✅ PDF guardado exitosamente como:', nombreArchivo);
             
-            // Pequeña espera para asegurar que el archivo se guarde
             await new Promise(resolve => setTimeout(resolve, 500));
-            
             showNotification('✅ PDF generado y descargado exitosamente', 'success');
             
         } catch (saveError) {
-            console.error('Error al guardar PDF con pdf.save():', saveError);
+            console.error('[PDF Debug] Error al guardar PDF con pdf.save():', saveError);
             
-            // Método 2: Alternativa usando blob y descarga manual
             try {
-                console.log('🔄 Intentando método alternativo de descarga...');
-                
-                // Convertir PDF a blob
+                console.log('[PDF Debug] Intentando Método 2 (Blob)...');
                 const pdfBlob = pdf.output('blob');
-                
-                // Crear URL temporal
                 const blobUrl = URL.createObjectURL(pdfBlob);
                 
-                // Crear enlace de descarga
                 const downloadLink = document.createElement('a');
                 downloadLink.href = blobUrl;
                 downloadLink.download = nombreArchivo;
                 downloadLink.style.display = 'none';
                 
-                // Agregar al DOM, hacer clic y limpiar
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
                 
-                // Esperar un poco antes de limpiar
                 setTimeout(() => {
                     document.body.removeChild(downloadLink);
                     URL.revokeObjectURL(blobUrl);
                 }, 100);
                 
-                console.log('✅ PDF descargado con método alternativo');
-                
-                // Limpiar referencias
-                if (pdfContainer && pdfContainer.parentNode) {
-                    pdfContainer.parentNode.removeChild(pdfContainer);
-                }
-                pdfContainer = null;
-                
+                console.log('✅ PDF descargado con método alternativo (Blob)');
                 showNotification('✅ PDF generado y descargado exitosamente', 'success');
                 
             } catch (alternativeError) {
-                console.error('Error también con método alternativo:', alternativeError);
+                console.error('[PDF Debug] Error en Método 2 (Blob):', alternativeError);
                 
-                // Método 3: Abrir en nueva pestaña como último recurso
                 try {
-                    console.log('🔄 Intentando abrir en nueva pestaña...');
-                    
+                    console.log('[PDF Debug] Intentando Método 3 (Nueva pestaña)...');
                     const pdfDataUri = pdf.output('datauristring');
                     const newWindow = window.open(pdfDataUri, '_blank');
                     
@@ -6688,21 +6703,19 @@ async function downloadPDF() {
                         console.log('✅ PDF abierto en nueva pestaña');
                         showNotification('📄 PDF abierto en nueva pestaña - guarda manualmente', 'info');
                     } else {
-                        throw new Error('No se pudo abrir nueva pestaña');
+                        throw new Error('Nueva pestaña bloqueada por el navegador.');
                     }
                     
                 } catch (finalError) {
-                    console.error('Error con todos los métodos:', finalError);
+                    console.error('[PDF Debug] Error en todos los métodos de descarga:', finalError);
                     showNotification('❌ No se pudo descargar el PDF - intenta de nuevo', 'error');
                 }
-                
             }
         }
         
     } catch (error) {
-        console.error('Error al generar PDF:', error);
+        console.error('[PDF Debug] Error crítico al generar PDF:', error);
         console.error('Detalles del error:', error.message, error.stack);
-        
         showNotification('❌ Error al generar PDF: ' + (error.message || 'Error desconocido'), 'error');
     }
 }

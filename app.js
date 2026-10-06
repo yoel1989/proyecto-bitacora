@@ -1,26 +1,29 @@
 // Supabase client está configurado en config.js
 // Asegúrate de que config.js se cargue antes que app.js
 
-// Registrar Service Worker para modo offline
+// Registrar Service Worker para modo offline (y actualización automática)
 if ('serviceWorker' in navigator) {
+    // Recargar automáticamente cuando un Service Worker nuevo toma el control:
+    // así las actualizaciones se aplican solas, sin pedirle al usuario limpiar caché.
+    let refreshingSW = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshingSW) return;
+        refreshingSW = true;
+        console.log('🔄 Service Worker actualizado: recargando la app automáticamente...');
+        window.location.reload();
+    });
+
     window.addEventListener('load', () => {
         // Usar ruta relativa para compatibilidad con diferentes entornos
         navigator.serviceWorker.register('./sw.js')
             .then((registration) => {
                 console.log('✅ Service Worker registrado:', registration.scope);
 
-                // Escuchar actualizaciones del SW
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    if (newWorker) {
-                        newWorker.addEventListener('statechange', () => {
-                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                // Nueva versión disponible
-                                showNotification('🔄 Nueva versión disponible. Actualiza la página para aplicar cambios.', 'info', 5000);
-                            }
-                        });
-                    }
-                });
+                // Comprobar actualizaciones del SW aunque la app siga abierta (SPA)
+                setInterval(() => {
+                    registration.update().catch(() => {});
+                }, 60 * 60 * 1000);
+                registration.update().catch(() => {});
             })
             .catch((error) => {
                 console.error('❌ Error registrando Service Worker:', error);

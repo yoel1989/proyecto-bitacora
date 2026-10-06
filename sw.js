@@ -1,6 +1,16 @@
-// Service Worker para modo offline
-const CACHE_NAME = 'bitacora-cache-v2';
-const STATIC_CACHE = 'bitacora-static-v2';
+// Service Worker para modo offline + ACTUALIZACIÓN AUTOMÁTICA
+// Estrategia:
+//  - Páginas (HTML): network-first → siempre intenta la red para recibir la última
+//    versión; la caché solo se usa si no hay conexión.
+//  - Assets del propio sitio (app.js, styles.css, etc.): stale-while-revalidate →
+//    se responde rápido desde caché y se refresca en segundo plano, así nunca queda
+//    una versión vieja para siempre.
+//  - Combinado con skipWaiting + clients.claim() y el listener controllerchange de
+//    la página, cada nueva versión se aplica sola, SIN que el usuario limpie caché.
+
+const CACHE_VERSION = 'v3';
+const CACHE_NAME = `bitacora-cache-${CACHE_VERSION}`;
+const STATIC_CACHE = `bitacora-static-${CACHE_VERSION}`;
 
 // Recursos a cachear (rutas relativas para compatibilidad)
 const STATIC_ASSETS = [
@@ -21,15 +31,28 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
     console.log('🔧 Service Worker instalándose...');
     event.waitUntil(
-        caches.open(STATIC_CACHE).then((cache) => {
-            console.log('🔧 Cacheando recursos estáticos...');
-            return cache.addAll(STATIC_ASSETS);
-        }).then(() => {
-            console.log('✅ Service Worker instalado');
-            return self.skipWaiting();
-        }).catch((error) => {
-            console.error('❌ Error instalando Service Worker:', error);
-        })
+        caches.open(STATIC_CACHE)
+            .then((cache) => {
+                console.log('🔧 Cacheando recursos estáticos...');
+                return cache.addAll(STATIC_ASSETS);
+            })
+            // Limpiar entradas con query strings (versiones viejas de app.js?v=... etc.)
+            .then(() => caches.open(STATIC_CACHE))
+            .then((cache) => cache.keys().then((keys) =>
+                Promise.all(keys.map((req) => {
+                    const url = new URL(req.url);
+                    if (url.origin === self.location.origin && url.search) {
+                        return cache.delete(req);
+                    }
+                }))
+            ))
+            .then(() => {
+                console.log('✅ Service Worker instalado');
+                return self.skipWaiting();
+            })
+            .catch((error) => {
+                console.error('❌ Error instalando Service Worker:', error);
+            })
     );
 });
 
@@ -49,55 +72,86 @@ self.addEventListener('activate', (event) => {
         }).then(() => {
             console.log('✅ Service Worker activado');
             return self.clients.claim();
+        }).then(() => {
+            // Recargar todas las pestañas/ventanas abiertas para aplicar la nueva
+            // versión automáticamente (funciona incluso con la versión anterior de la app).
+            return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+                .then((clients) => {
+                    return Promise.all(clients.map((client) => {
+                        if (client.url && /^https?:/.test(client.url)) {
+                            return client.navigate(client.url).catch(() => {});
+                        }
+                        return Promise.resolve();
+                    }));
+                });
         })
     );
 });
 
 // Interceptar requests
 self.addEventListener('fetch', (event) => {
-    const url = new URL(event.request.url);
+    const request = event.request;
 
     // Solo cachear requests GET
-    if (event.request.method !== 'GET') return;
+    if (request.method !== 'GET') return;
 
-    // No cachear requests a Supabase (API calls)
+    const url = new URL(request.url);
+
+    // No cachear requests a Supabase ni al worker de subida (API calls)
     if (url.hostname.includes('supabase') ||
         url.hostname.includes('bitacora-upload-worker')) {
         return;
     }
 
-    event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) {
-                // Retornar cache si existe
-                return cachedResponse;
-            }
-
-            // Si no está en cache, hacer request y cachear
-            return fetch(event.request).then((response) => {
-                // Solo cachear responses exitosas
-                if (!response || response.status !== 200 || response.type !== 'basic') {
+    // Navegaciones (HTML): network-first -> siempre la versión más reciente
+    if (request.mode === 'navigate') {
+        event.respondWith(
+            fetch(request, { cache: 'no-store' })
+                .then((response) => {
+                    if (response && response.status === 200 && response.type === 'basic') {
+                        const responseToCache = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(request, responseToCache);
+                        }).catch(() => {});
+                    }
                     return response;
-                }
+                })
+                .catch(() => {
+                    return caches.match(request).then((cached) => {
+                        if (cached) return cached;
+                        return caches.match('./index.html');
+                    });
+                })
+        );
+        return;
+    }
 
-                // Clonar response para cachear
-                const responseToCache = response.clone();
+    // Assets del propio sitio (app.js, styles.css, etc.): stale-while-revalidate
+    if (url.origin === self.location.origin) {
+        event.respondWith(
+            caches.match(request).then((cachedResponse) => {
+                // Lanzar la actualización de red en segundo plano
+                const networkUpdate = fetch(request)
+                    .then((response) => {
+                        if (response && response.status === 200 && response.type === 'basic') {
+                            const responseToCache = response.clone();
+                            caches.open(CACHE_NAME).then((cache) => {
+                                cache.put(request, responseToCache);
+                            }).catch(() => {});
+                        }
+                        return response;
+                    })
+                    .catch(() => undefined);
 
-                caches.open(STATIC_CACHE).then((cache) => {
-                    cache.put(event.request, responseToCache);
-                });
+                // Si hay copia en caché, devolverla ya (rápido); si no, esperar la red
+                return cachedResponse || networkUpdate;
+            })
+        );
+        return;
+    }
 
-                return response;
-            }).catch((error) => {
-                console.error('❌ Error en fetch:', error);
-                // Si falla y es una página HTML, mostrar página offline
-                if (event.request.destination === 'document') {
-                    return caches.match('./index.html');
-                }
-                throw error;
-            });
-        })
-    );
+    // Cross-origin (CDNs e imágenes): siempre red (las CDN ya se precachean en install)
+    event.respondWith(fetch(request));
 });
 
 // Manejar mensajes desde el main thread

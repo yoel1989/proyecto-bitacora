@@ -1347,6 +1347,9 @@ function closeForgotPasswordModal() {
 }
 
 // Enviar el correo de recuperación desde el modal
+let inCooldown = false;
+let cooldownTimerId = null;
+
 async function handleForgotPasswordSubmit(e) {
     e.preventDefault();
 
@@ -1374,6 +1377,11 @@ async function handleForgotPasswordSubmit(e) {
         return;
     }
 
+    // Resetear estado de reintento (cooldown) en cada envío
+    clearInterval(cooldownTimerId);
+    cooldownTimerId = null;
+    inCooldown = false;
+
     btn.disabled = true;
     btn.textContent = 'Enviando...';
 
@@ -1392,10 +1400,27 @@ async function handleForgotPasswordSubmit(e) {
         }
 
         if (okEl) {
-            okEl.textContent = '📧 Si el correo existe, recibirás un enlace para restablecer tu contraseña.';
+            okEl.textContent = '📧 Enviamos el enlace a ' + email + '. Revisa también la carpeta de spam o promociones. '
+                + 'Si no llega, confirma que el correo esté registrado en la bitácora y espera unos minutos '
+                + '(Supabase limita el envío de correos).';
             okEl.style.display = 'block';
         }
         if (emailEl) emailEl.value = '';
+
+        // Evitar reenvíos seguidos (límite de Supabase: pocos correos por hora)
+        inCooldown = true;
+        let cooldown = 60;
+        cooldownTimerId = setInterval(() => {
+            cooldown--;
+            if (cooldown <= 0) {
+                clearInterval(cooldownTimerId);
+                cooldownTimerId = null;
+                btn.disabled = false;
+                btn.textContent = '📧 Enviar enlace de recuperación';
+            } else {
+                btn.textContent = '⏳ Reintentar en ' + cooldown + 's';
+            }
+        }, 1000);
     } catch (error) {
         console.warn('⚠️ Error enviando correo de recuperación:', error.message);
         if (errEl) {
@@ -1403,8 +1428,10 @@ async function handleForgotPasswordSubmit(e) {
             errEl.style.display = 'block';
         }
     } finally {
-        btn.disabled = false;
-        btn.textContent = 'Enviar enlace de recuperación';
+        if (!inCooldown) {
+            btn.disabled = false;
+            btn.textContent = 'Enviar enlace de recuperación';
+        }
     }
 }
 

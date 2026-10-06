@@ -42,7 +42,7 @@
                 console.log('✅ config.js cargado');
                 // Cargar app.js
                 const appScript = document.createElement('script');
-                appScript.src = 'app.js?v=20261006l';
+                appScript.src = 'app.js?v=20261006n';
                 appScript.onload = () => console.log('✅ app.js cargado - VERSION CONECTIVIDAD_REAL');
                 appScript.onerror = () => console.error('❌ Error cargando app.js');
                 document.head.appendChild(appScript);
@@ -392,7 +392,7 @@
                     <div class="form-group">
                         <label>Correo electrónico: *</label>
                         <input type="email" id="forgotEmail" required placeholder="tu@ejemplo.com" autocomplete="email">
-                        <small>Te enviaremos un enlace para restablecer tu contraseña</small>
+                        <small>Debe ser el mismo correo con el que te registraste en la bitácora</small>
                     </div>
                     <button type="submit" id="forgotSendBtn" class="register-btn">📧 Enviar enlace de recuperación</button>
                 </form>

@@ -2044,9 +2044,22 @@ function updateExistingEntriesWithEmails(entries) {
 let isFiltering = false;
 
 // Filtrar y mostrar entradas con debounce para mejor rendimiento
+let pendingFilterRun = false;
+
+function endFiltering() {
+    isFiltering = false;
+    // Si mientras se filtraba llegó otra solicitud, ejecutarla ahora (no descartarla)
+    if (pendingFilterRun) {
+        pendingFilterRun = false;
+        console.log('🔁 Re-ejecutando filtro pendiente...');
+        setTimeout(() => filterAndDisplayEntries(), 0);
+    }
+}
+
 async function filterAndDisplayEntries(append = false, newEntries = null) {
     if (isFiltering && !append) {
-        console.log('⏳ Ya se está filtrando, omitiendo...');
+        console.log('⏳ Ya se está filtrando, encolando solicitud...');
+        pendingFilterRun = true;
         return;
     }
 
@@ -2057,7 +2070,7 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
     // Si estamos añadiendo y tenemos las nuevas entradas, solo mostramos esas
     if (append && newEntries) {
         await displayEntries(newEntries, true);
-        isFiltering = false;
+        endFiltering();
         
         // ACTUALIZACIÓN DE BOTÓN Y CONTADOR INCLUSO EN APPEND
         const loadMoreBtn = document.getElementById('loadMoreBtn');
@@ -2085,7 +2098,7 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
         try {
             let query = supabaseClient
                 .from('bitacora')
-                .select('id, fecha, fecha_hora, titulo, descripcion, tipo_nota, ubicacion, user_id, folio, hora_inicio, hora_final', { count: 'exact' })
+                .select('id, fecha, fecha_hora, titulo, descripcion, tipo_nota, ubicacion, user_id, folio, hora_inicio, hora_final, archivos', { count: 'exact' })
                 .limit(5000)
                 .order('fecha', { ascending: false });
 
@@ -2114,7 +2127,7 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
             if (error) {
                 console.error('Error cargando todas las entradas para filtros:', error);
                 showNotification('❌ Error al aplicar filtros', 'error');
-                isFiltering = false;
+                endFiltering();
                 return;
             }
 
@@ -2152,7 +2165,7 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
         } catch (error) {
             console.error('Error al cargar entradas filtradas:', error);
             showNotification('❌ Error al aplicar filtros', 'error');
-            isFiltering = false;
+            endFiltering();
             return;
         }
     } else {
@@ -2162,21 +2175,41 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
     // Filtrar por búsqueda (siempre se hace en JavaScript)
     console.log('🔍 searchTerm:', searchTerm);
     if (searchTerm) {
-        const words = searchTerm.toLowerCase().split(/\s+/).filter(w => w.length > 1);
-        filteredEntries = filteredEntries.filter(entry => {
-            const fields = [
-                entry.titulo,
-                entry.descripcion,
-                entry.tipo_nota,
-                entry.ubicacion,
-                entry.hora_inicio,
-                entry.hora_final,
-                entry.folio,
-                entry.profiles?.email,
-                entry.user_id
-            ].map(f => (f || '').toLowerCase()).join(' ');
-            return words.some(word => fields.includes(word));
-        });
+        const term = searchTerm.toLowerCase().trim();
+        const normalizedTerm = term.replace(/^#/, '').trim();
+
+        // 1) Prioridad: coincidencia EXACTA de folio
+        const folioMatches = filteredEntries.filter(entry =>
+            entry.folio !== null &&
+            entry.folio !== undefined &&
+            String(entry.folio).toLowerCase().replace(/^#/, '').trim() === normalizedTerm
+        );
+
+        if (folioMatches.length > 0) {
+            console.log('🔍 Folio exacto encontrado:', folioMatches.length, 'resultado(s)');
+            filteredEntries = folioMatches;
+        } else {
+            // 2) Búsqueda por palabras COMPLETAS (no subcadenas)
+            const escapeRegExp = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const words = term.split(/\s+/).filter(w => w.length > 1);
+            filteredEntries = filteredEntries.filter(entry => {
+                const fields = [
+                    entry.titulo,
+                    entry.descripcion,
+                    entry.tipo_nota,
+                    entry.ubicacion,
+                    entry.hora_inicio,
+                    entry.hora_final,
+                    entry.folio,
+                    entry.profiles?.email,
+                    entry.user_id
+                ].map(f => String(f ?? '').toLowerCase());
+                return words.some(word => {
+                    const regex = new RegExp(`(^|[^\\w])${escapeRegExp(word)}([^\\w]|$)`);
+                    return fields.some(field => regex.test(field));
+                });
+            });
+        }
         console.log('🔍 Después de search:', filteredEntries.length);
     }
 
@@ -2203,7 +2236,7 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
         loadMoreBtn.style.display = hasAdvancedFilters ? 'none' : (allEntries.length >= totalEntries ? 'none' : 'block');
     }
 
-    isFiltering = false;
+    endFiltering();
 }
 
 // Debounce para búsqueda (mejora rendimiento)
@@ -5973,7 +6006,7 @@ async function loadAllFilteredEntries() {
         // Construir consulta base (solo campos necesarios para reducir tamaño de respuesta)
         let query = supabaseClient
             .from('bitacora')
-            .select('id, fecha, fecha_hora, titulo, descripcion, tipo_nota, ubicacion, user_id, folio, hora_inicio, hora_final', { count: 'exact' })
+            .select('id, fecha, fecha_hora, titulo, descripcion, tipo_nota, ubicacion, user_id, folio, hora_inicio, hora_final, archivos', { count: 'exact' })
             .limit(5000)
             .order('fecha', { ascending: false });
         

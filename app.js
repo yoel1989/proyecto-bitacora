@@ -1158,6 +1158,256 @@ async function handleLogin(e) {
     }
 }
 
+// ==================== RECUPERACIÓN DE CONTRASEÑA ====================
+
+// Detectar si la URL contiene un enlace de recuperación de Supabase
+// Formato del enlace: #access_token=...&token_type=bearer&type=recovery
+function detectPasswordRecovery() {
+    const hash = window.location.hash || '';
+    if (!hash || hash.length < 2) return false;
+    try {
+        const params = new URLSearchParams(hash.substring(1));
+        const type = (params.get('type') || '').toLowerCase();
+        const accessToken = params.get('access_token');
+        return (type === 'recovery' || type === 'recove') && !!accessToken;
+    } catch (e) {
+        return false;
+    }
+}
+
+function showRecoverPasswordScreen() {
+    const screen = document.getElementById('recoverPasswordScreen');
+    const loginScreen = document.getElementById('loginScreen');
+    const mainApp = document.getElementById('mainApp');
+
+    showRecoverError('');
+    showRecoverSuccess('');
+
+    if (loginScreen) loginScreen.style.setProperty('display', 'none', 'important');
+    if (mainApp) mainApp.style.display = 'none';
+    if (screen) screen.style.setProperty('display', 'flex', 'important');
+
+    const firstField = document.getElementById('recoverNewPassword');
+    if (firstField) setTimeout(() => firstField.focus(), 300);
+}
+
+function hideRecoverPasswordScreen() {
+    const screen = document.getElementById('recoverPasswordScreen');
+    if (screen) screen.style.setProperty('display', 'none', 'important');
+}
+
+function showRecoverError(text) {
+    const errEl = document.getElementById('recoverError');
+    if (errEl) {
+        errEl.textContent = text;
+        errEl.style.display = text ? 'block' : 'none';
+    }
+    const okEl = document.getElementById('recoverSuccess');
+    if (okEl && text) okEl.style.display = 'none';
+}
+
+function showRecoverSuccess(text) {
+    const okEl = document.getElementById('recoverSuccess');
+    if (okEl) {
+        okEl.textContent = text;
+        okEl.style.display = text ? 'block' : 'none';
+    }
+    const errEl = document.getElementById('recoverError');
+    if (errEl && text) errEl.style.display = 'none';
+}
+
+// Cancelar recuperación y volver al login
+function cancelPasswordRecovery() {
+    hideRecoverPasswordScreen();
+    showLogin();
+}
+
+// Inicializar el flujo de recuperación cuando el usuario llega por el enlace del correo
+async function initPasswordRecovery() {
+    console.log('🔑 Enlace de recuperación de contraseña detectado en la URL');
+    showRecoverPasswordScreen();
+
+    if (!supabaseClient) {
+        showRecoverError('Modo offline: no se puede cambiar la contraseña sin conexión.');
+        return;
+    }
+
+    try {
+        // Establecer la sesión de recuperación con los tokens que vienen en la URL
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+
+        if (error || !session) {
+            console.warn('⚠️ Error en sesión de recuperación:', error ? error.message : 'sin sesión');
+            showRecoverError('El enlace de recuperación no es válido o ha expirado. Solicita uno nuevo.');
+            return;
+        }
+
+        const email = (session.user && (session.user.email || session.user.user_metadata?.email)) || '';
+        const infoEl = document.getElementById('recoverUserInfo');
+        if (infoEl) {
+            infoEl.textContent = email ? 'Restableciendo contraseña para: ' + email : '';
+        }
+
+        // Quitar los tokens de la URL para que no se puedan reutilizar
+        try {
+            const cleanPath = window.location.pathname + window.location.search;
+            window.history.replaceState(null, '', cleanPath);
+        } catch (e) { /* ignorar */ }
+    } catch (err) {
+        console.warn('⚠️ Error inicializando recuperación:', err.message);
+        showRecoverError('El enlace de recuperación no es válido o ha expirado. Solicita uno nuevo.');
+    }
+}
+
+// Guardar la nueva contraseña (el usuario llegó por el enlace de recuperación)
+async function submitNewPassword(e) {
+    e.preventDefault();
+
+    const passEl = document.getElementById('recoverNewPassword');
+    const confirmEl = document.getElementById('recoverNewPasswordConfirm');
+    const btn = document.getElementById('recoverSaveBtn');
+    const password = passEl ? passEl.value : '';
+    const passwordConfirm = confirmEl ? confirmEl.value : '';
+
+    showRecoverSuccess('');
+    showRecoverError('');
+
+    if (password.length < 6) {
+        showRecoverError('La contraseña debe tener al menos 6 caracteres.');
+        return;
+    }
+    if (password !== passwordConfirm) {
+        showRecoverError('Las contraseñas no coinciden.');
+        return;
+    }
+    if (!supabaseClient) {
+        showRecoverError('Modo offline: no se puede cambiar la contraseña sin conexión.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    try {
+        const { error } = await supabaseClient.auth.updateUser({ password });
+
+        if (error) {
+            console.warn('⚠️ Error actualizando contraseña:', error.message);
+            const msg = (error.message || '').toLowerCase();
+            if (/expired|invalid|oauth|session/i.test(msg)) {
+                showRecoverError('El enlace de recuperación es inválido o ha expirado. Solicita uno nuevo.');
+            } else {
+                showRecoverError('No se pudo cambiar la contraseña: ' + (error.message || 'intenta de nuevo.'));
+            }
+            btn.disabled = false;
+            btn.textContent = 'Guardar nueva contraseña';
+            return;
+        }
+
+        showRecoverSuccess('✅ Contraseña actualizada correctamente. Inicia sesión con tu nueva contraseña.');
+
+        // Cerrar la sesión de recuperación y volver al login
+        try { await supabaseClient.auth.signOut(); } catch (e) { /* ignorar */ }
+        localStorage.removeItem('bitacora_session');
+        currentUser = null;
+
+        setTimeout(() => {
+            hideRecoverPasswordScreen();
+            showLogin();
+            const loginErrorEl = document.getElementById('loginError');
+            if (loginErrorEl) {
+                loginErrorEl.textContent = '✔ Contraseña actualizada. Inicia sesión con tu nueva contraseña.';
+                loginErrorEl.style.color = '#4ade80';
+            }
+        }, 1200);
+    } catch (err) {
+        console.warn('⚠️ Error general cambiando contraseña:', err.message);
+        showRecoverError('No se pudo cambiar la contraseña: ' + (err.message || 'intenta de nuevo.'));
+        btn.disabled = false;
+        btn.textContent = 'Guardar nueva contraseña';
+    }
+}
+
+// Abrir modal "olvidé mi contraseña"
+function openForgotPasswordModal() {
+    const modal = document.getElementById('forgotPasswordModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const errEl = document.getElementById('forgotError');
+    const okEl = document.getElementById('forgotSuccess');
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    if (okEl) { okEl.style.display = 'none'; okEl.textContent = ''; }
+    const emailEl = document.getElementById('forgotEmail');
+    if (emailEl) setTimeout(() => emailEl.focus(), 300);
+}
+
+function closeForgotPasswordModal() {
+    const modal = document.getElementById('forgotPasswordModal');
+    if (modal) modal.style.display = 'none';
+}
+
+// Enviar el correo de recuperación desde el modal
+async function handleForgotPasswordSubmit(e) {
+    e.preventDefault();
+
+    const emailEl = document.getElementById('forgotEmail');
+    const btn = document.getElementById('forgotSendBtn');
+    const errEl = document.getElementById('forgotError');
+    const okEl = document.getElementById('forgotSuccess');
+    const email = emailEl ? emailEl.value.trim() : '';
+
+    if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+    if (okEl) { okEl.style.display = 'none'; okEl.textContent = ''; }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        if (errEl) {
+            errEl.textContent = 'Ingresa un correo electrónico válido.';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+    if (!supabaseClient) {
+        if (errEl) {
+            errEl.textContent = 'Modo offline: no se puede enviar el correo sin conexión.';
+            errEl.style.display = 'block';
+        }
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+
+    try {
+        // Redirigir de vuelta a la misma aplicación para mostrar el formulario de nueva contraseña
+        let redirectTo = window.location.origin + window.location.pathname;
+        let result = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+
+        // Si el redirectTo no está permitido en Supabase, reintentar con la URL por defecto (Site URL)
+        if (result && result.error && /redirect/i.test(result.error.message)) {
+            result = await supabaseClient.auth.resetPasswordForEmail(email);
+        }
+
+        if (result && result.error) {
+            throw result.error;
+        }
+
+        if (okEl) {
+            okEl.textContent = '📧 Si el correo existe, recibirás un enlace para restablecer tu contraseña.';
+            okEl.style.display = 'block';
+        }
+        if (emailEl) emailEl.value = '';
+    } catch (error) {
+        console.warn('⚠️ Error enviando correo de recuperación:', error.message);
+        if (errEl) {
+            errEl.textContent = 'Error al enviar el correo: ' + (error.message || 'intenta de nuevo.');
+            errEl.style.display = 'block';
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar enlace de recuperación';
+    }
+}
+
 // Logout
 async function handleLogout() {
     // Limpiar notificaciones en tiempo real
@@ -3897,6 +4147,8 @@ function setupTextarea(textarea) {
 
 // Event listeners
 document.getElementById('loginForm').addEventListener('submit', handleLogin);
+document.getElementById('forgotPasswordForm')?.addEventListener('submit', handleForgotPasswordSubmit);
+document.getElementById('recoverPasswordForm')?.addEventListener('submit', submitNewPassword);
 document.getElementById('bitacoraForm').addEventListener('submit', handleBitacoraSubmit);
 document.getElementById('logoutBtn').addEventListener('click', handleLogout);
 document.getElementById('newEntryBtn').addEventListener('click', showForm);
@@ -7500,19 +7752,29 @@ window.openInvitationModal = openInvitationModal;
 window.closeInvitationModal = closeInvitationModal;
 window.openRegisterModal = openRegisterModal;
 window.closeRegisterModal = closeRegisterModal;
+window.openForgotPasswordModal = openForgotPasswordModal;
+window.closeForgotPasswordModal = closeForgotPasswordModal;
+window.cancelPasswordRecovery = cancelPasswordRecovery;
 window.deleteInvitationCode = deleteInvitationCode;
 window.copyGeneratedCode = copyGeneratedCode;
 
 // Iniciar
 console.log('🚀 Iniciando aplicación...');
-checkAuth().then(() => {
-    console.log('✅ checkAuth completado exitosamente');
-    console.log('🔍 Verificando funciones globales:', {
-        deleteEntry: typeof window.deleteEntry,
-        diagnoseDeleteIssue: typeof window.diagnoseDeleteIssue
+
+// Si el usuario llegó por un enlace de recuperación de contraseña, mostrar
+// directamente el formulario para definir la nueva contraseña.
+if (detectPasswordRecovery()) {
+    initPasswordRecovery();
+} else {
+    checkAuth().then(() => {
+        console.log('✅ checkAuth completado exitosamente');
+        console.log('🔍 Verificando funciones globales:', {
+            deleteEntry: typeof window.deleteEntry,
+            diagnoseDeleteIssue: typeof window.diagnoseDeleteIssue
+        });
+    }).catch(error => {
+        console.error('❌ Error en checkAuth:', error);
+        console.error('Stack trace:', error.stack);
+        showNotification('❌ Error al iniciar sesión', 'error');
     });
-}).catch(error => {
-    console.error('❌ Error en checkAuth:', error);
-    console.error('Stack trace:', error.stack);
-    showNotification('❌ Error al iniciar sesión', 'error');
-});
+}

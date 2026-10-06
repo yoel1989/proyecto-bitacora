@@ -77,6 +77,14 @@ Usa el script SQL que ya tienes o crea manualmente:
 - `bitacora_read`
 - `notification_logs`
 
+### 2.4 Configurar recuperación de contraseña (Auth)
+Para que el correo de "recuperar contraseña" funcione:
+1. Ve a **Authentication** → **URL Configuration** → **Site URL** y pon la URL de tu app (ej: `https://tu-dominio.com`).
+2. En **Redirect URLs** asegúrate de incluir la URL de tu app (ej: `https://tu-dominio.com` y/o `https://tu-dominio.com/index.html`).
+3. En **Authentication** → **Providers** → **Email**, confirma que el correo de recuperación esté habilitado.
+4. La app ya maneja la redirección sola: el enlace del correo abre la app y muestra el formulario
+   para definir la nueva contraseña (no hace falta una página aparte).
+
 ---
 
 ## Paso 3: Configurar Variables en el Código

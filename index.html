@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>📋 Bitácora de Obra Consorcio Malla Vial</title>
     <link rel="stylesheet" href="styles-new.css?v=1">
-    <link rel="stylesheet" href="styles.css?v=20261006e">
+    <link rel="stylesheet" href="styles.css?v=20261006f">
     <link rel="stylesheet" href="comments-buttons.css?v=20250117">
     <link rel="stylesheet" href="comments-modal.css?v=20250118a">
     <script>
@@ -42,7 +42,7 @@
                 console.log('✅ config.js cargado');
                 // Cargar app.js
                 const appScript = document.createElement('script');
-                appScript.src = 'app.js?v=20261006k';
+                appScript.src = 'app.js?v=20261006l';
                 appScript.onload = () => console.log('✅ app.js cargado - VERSION CONECTIVIDAD_REAL');
                 appScript.onerror = () => console.error('❌ Error cargando app.js');
                 document.head.appendChild(appScript);
@@ -72,8 +72,27 @@
                 </form>
                 <div class="login-register-link">
                     <p>¿No tienes cuenta? <a href="#" onclick="openRegisterModal()">Regístrate con código de invitación</a></p>
+                    <p style="margin-top: 0.4rem;"><a href="#" onclick="openForgotPasswordModal(); return false;">¿Olvidaste tu contraseña?</a></p>
                 </div>
                 <p id="loginError" class="error"></p>
+            </div>
+        </div>
+
+        <!-- Recuperación de Contraseña (el usuario llega por el enlace del correo) -->
+        <div id="recoverPasswordScreen" style="display: none !important;">
+            <div class="login-container">
+                <h2>Nueva Contraseña</h2>
+                <form id="recoverPasswordForm">
+                    <input type="password" id="recoverNewPassword" placeholder="Nueva contraseña (mínimo 6 caracteres)" required minlength="6" autocomplete="new-password">
+                    <input type="password" id="recoverNewPasswordConfirm" placeholder="Repite la nueva contraseña" required minlength="6" autocomplete="new-password">
+                    <button type="submit" id="recoverSaveBtn">Guardar nueva contraseña</button>
+                </form>
+                <p id="recoverUserInfo" class="recover-user-info"></p>
+                <p id="recoverError" class="error" style="display: none;"></p>
+                <p id="recoverSuccess" class="login-success" style="display: none;"></p>
+                <div class="login-register-link">
+                    <p><a href="#" onclick="cancelPasswordRecovery(); return false;">← Volver al inicio de sesión</a></p>
+                </div>
             </div>
         </div>
  
@@ -356,6 +375,31 @@
                 </form>
                 <div class="login-link">
                     <p>¿Ya tienes cuenta? <a href="#" onclick="closeRegisterModal()">Inicia sesión</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Recuperación de Contraseña -->
+    <div id="forgotPasswordModal" class="register-modal" style="display: none;">
+        <div class="register-modal-content">
+            <div class="register-modal-header">
+                <h3>🔑 Recuperar Contraseña</h3>
+                <button class="close-register-modal" onclick="closeForgotPasswordModal()">✕</button>
+            </div>
+            <div class="register-modal-body">
+                <form id="forgotPasswordForm">
+                    <div class="form-group">
+                        <label>Correo electrónico: *</label>
+                        <input type="email" id="forgotEmail" required placeholder="tu@ejemplo.com" autocomplete="email">
+                        <small>Te enviaremos un enlace para restablecer tu contraseña</small>
+                    </div>
+                    <button type="submit" id="forgotSendBtn" class="register-btn">📧 Enviar enlace de recuperación</button>
+                </form>
+                <p id="forgotError" class="error" style="display: none;"></p>
+                <p id="forgotSuccess" class="login-success" style="display: none;"></p>
+                <div class="login-link">
+                    <p>¿Recordaste tu contraseña? <a href="#" onclick="closeForgotPasswordModal()">Inicia sesión</a></p>
                 </div>
             </div>
         </div>

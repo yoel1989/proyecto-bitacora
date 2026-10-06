@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>📋 Bitácora de Obra Consorcio Malla Vial</title>
     <link rel="stylesheet" href="styles-new.css?v=1">
-    <link rel="stylesheet" href="styles.css?v=20260119a">
+    <link rel="stylesheet" href="styles.css?v=20261006e">
     <link rel="stylesheet" href="comments-buttons.css?v=20250117">
     <link rel="stylesheet" href="comments-modal.css?v=20250118a">
     <script>
@@ -42,7 +42,7 @@
                 console.log('✅ config.js cargado');
                 // Cargar app.js
                 const appScript = document.createElement('script');
-                appScript.src = 'app.js?v=20261006c';
+                appScript.src = 'app.js?v=20261006j';
                 appScript.onload = () => console.log('✅ app.js cargado - VERSION CONECTIVIDAD_REAL');
                 appScript.onerror = () => console.error('❌ Error cargando app.js');
                 document.head.appendChild(appScript);
@@ -163,6 +163,7 @@
                         <div class="form-group">
                             <label>Archivos (Imágenes, PDF, Word, Excel, ZIP, AutoCAD):</label>
                             <input type="file" id="fotos" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.dwg,.dxf,.dwf">
+                            <p class="file-limit-hint">📸 Límite de <strong>20 imágenes por entrada</strong>. Al superarlo no se agregarán más fotos.</p>
                             <div id="photoPreview" class="file-preview" style="display: none;">
                                 <h4>📎 Vista previa de archivos:</h4>
                                 <div id="photoPreviewGrid" class="file-preview-grid"></div>
@@ -238,6 +239,7 @@
                             </div>
                             <div class="filter-actions">
                                 <button id="downloadPdf" class="download-pdf-btn">📥 Descargar PDF</button>
+                                <button id="downloadAttachments" class="download-attachments-btn" style="display: none;">📦 Descargar adjuntos</button>
                                 <button id="clearFilters" class="clear-filters-btn">Limpiar filtros</button>
                             </div>
                         </div>

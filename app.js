@@ -1405,6 +1405,26 @@ async function handleBitacoraSubmit(e) {
 
         console.log('  - fotoFiles.length:', fotoFiles.length);
 
+        // ===== Validar límite de 20 imágenes por entrada =====
+        let imagenesFinales = 0;
+        if (editId) {
+            const keepChecked = !keepPhotosCheckbox || keepPhotosCheckbox.checked;
+            if (keepChecked) {
+                try {
+                    const existentes = JSON.parse(form.dataset.existingPhotos || '[]');
+                    imagenesFinales += existentes.filter(esImagenArchivo).length;
+                } catch (err) { /* ignorar */ }
+            }
+        }
+        imagenesFinales += Array.from(fotoFiles).filter(esImagenArchivo).length;
+
+        if (imagenesFinales > MAX_IMAGENES_POR_ENTRADA) {
+            alert(`⚠️ No puedes guardar: la entrada tendría ${imagenesFinales} imágenes y el límite es ${MAX_IMAGENES_POR_ENTRADA}.\n\n` +
+                  `Elimina algunas imágenes antes de guardar.`);
+            return;
+        }
+        // =====================================================
+
         // Advertir sobre archivos offline (solo si realmente está offline)
         console.log('📝 Verificando condición offline:', { offlineMode, fotoFilesLength: fotoFiles.length });
         if (offlineMode && fotoFiles.length > 0) {
@@ -2043,6 +2063,10 @@ function updateExistingEntriesWithEmails(entries) {
 // Variable para evitar múltiples filtrados simultáneos
 let isFiltering = false;
 
+// Último resultado de filtros (para descarga de adjuntos en ZIP)
+let lastFilteredEntries = [];
+let hasActiveFilters = false;
+
 // Filtrar y mostrar entradas con debounce para mejor rendimiento
 let pendingFilterRun = false;
 
@@ -2111,13 +2135,17 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
                 query = query.eq('ubicacion', ubicacionFilter);
             }
 
+            // 'fecha' guarda la hora local (Bogotá) con etiqueta +00:00, no un instante UTC,
+            // así que los límites del día deben construirse con el valor crudo. Si se
+            // convirtiera con toISOString() el rango sería 05:00Z–04:59Z y se perderían
+            // las entradas de 00:00 a 04:59 del día elegido (y se colarían las del día siguiente).
             if (fechaInicioFilter) {
-                const inicio = new Date(fechaInicioFilter + 'T00:00:00').toISOString();
+                const inicio = fechaInicioFilter + 'T00:00:00.000Z';
                 query = query.gte('fecha', inicio);
             }
 
             if (fechaFinalFilter) {
-                const fin = new Date(fechaFinalFilter + 'T23:59:59').toISOString();
+                const fin = fechaFinalFilter + 'T23:59:59.999Z';
                 query = query.lte('fecha', fin);
             }
 
@@ -2215,6 +2243,13 @@ async function filterAndDisplayEntries(append = false, newEntries = null) {
 
     console.log('🔍 tipoFilter:', tipoFilter);
     console.log('🔍 ubicacionFilter:', ubicacionFilter);
+
+    // Guardar resultado del filtro para descarga de adjuntos (ZIP)
+    if (!append) {
+        lastFilteredEntries = filteredEntries;
+        hasActiveFilters = !!hasAdvancedFilters;
+        updateDownloadAttachmentsBtn();
+    }
 
     // Usar await para asegurar que displayEntries se complete antes de continuar
     await displayEntries(append ? newEntries : filteredEntries, append);
@@ -2470,22 +2505,23 @@ function createMobileEntryCard(entry) {
             if (type && type.startsWith('image/')) {
                 archivosHtml += `
                     <div class="mini-photo-container">
-                        <img class="mobile-foto lazy-image" data-src="${url}" onclick="window.open('${url}', '_blank')" title="${name}" />
+                        <img class="mobile-foto lazy-image" data-src="${url}" onclick="showAllArchivos('${entry.id}')" title="${name || 'Ver archivos'}" />
                     </div>
                 `;
             } else {
                 const icon = getFileIcon(name || url);
-                archivosHtml += `<div class="mobile-file-icon" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
+                archivosHtml += `<div class="mobile-file-icon" onclick="showAllArchivos('${entry.id}')" title="${name || 'Ver archivos'}">${icon}</div>`;
             }
         });
         
-        if (archivos.length > 4) {
-            archivosHtml += `
-                <div class="more-photos-mobile" onclick="showAllArchivos('${entry.id}')" style="display: flex; align-items: center; justify-content: center; width: 35px; height: 35px; background: #f0f4ff; border-radius: 4px; border: 1px solid #667eea; color: #667eea; font-weight: bold; font-size: 0.7rem; cursor: pointer;">
-                    +${archivos.length - 4}
-                </div>
-            `;
-        }
+        // Botón siempre visible para abrir el modal con todos los archivos
+        const restantes = archivos.length - archivos.slice(0, 4).length;
+        const etiqueta = restantes > 0 ? `+${restantes}` : `📦`;
+        archivosHtml += `
+            <div class="more-photos-mobile" onclick="showAllArchivos('${entry.id}')" title="Ver y descargar los ${archivos.length} archivos">
+                ${etiqueta}
+            </div>
+        `;
         archivosHtml += '</div>';
     }
 
@@ -2548,7 +2584,7 @@ function createDesktopRow(entry) {
     }
     
     if (archivos && archivos.length > 0) {
-        const archivosParaMostrar = archivos.slice(0, 3);
+        const archivosParaMostrar = archivos.slice(0, 2);
         archivosHtml = '<div class="archivos-container">';
         
         archivosParaMostrar.forEach(archivo => {
@@ -2560,22 +2596,23 @@ function createDesktopRow(entry) {
                 archivosHtml += `
                     <div class="mini-photo-container">
                         <div class="mini-image-placeholder">📷</div>
-                        <img class="mini-photo lazy-image" data-src="${url}" onclick="window.open('${url}', '_blank')" title="${name}" />
+                        <img class="mini-photo lazy-image" data-src="${url}" onclick="showAllArchivos('${entry.id}')" title="${name || 'Ver archivos'}" />
                     </div>
                 `;
             } else {
                 const icon = getFileIcon(name || url);
-                archivosHtml += `<div class="file-icon-preview" onclick="window.open('${url}', '_blank')" title="${name}">${icon}</div>`;
+                archivosHtml += `<div class="file-icon-preview" onclick="showAllArchivos('${entry.id}')" title="${name || 'Ver archivos'}">${icon}</div>`;
             }
         });
         
-        if (archivos.length > 3) {
-            archivosHtml += `
-                <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver todos los ${archivos.length} archivos">
-                    +${archivos.length - 3}
-                </span>
-            `;
-        }
+        // Botón siempre visible para abrir el modal con todos los archivos
+        const restantes = archivos.length - archivosParaMostrar.length;
+        const etiqueta = restantes > 0 ? `+${restantes}` : `📦`;
+        archivosHtml += `
+            <span class="more-photos" onclick="showAllArchivos('${entry.id}')" title="Ver y descargar los ${archivos.length} archivos">
+                ${etiqueta}
+            </span>
+        `;
         archivosHtml += '</div>';
     } else {
         archivosHtml = '<span class="no-photos">Sin archivos</span>';
@@ -2702,8 +2739,13 @@ function showAllArchivos(entryId) {
     let archivos = [];
     let found = false;
     
-    // Buscar en la variable global allEntries
-    const entry = allEntries.find(e => e.id == entryId);
+    // Buscar primero en las entradas filtradas (si hay filtro activo,
+    // la entrada NO está en allEntries)
+    let entry = (lastFilteredEntries || []).find(e => e.id == entryId);
+    if (!entry) {
+        // Buscar en la variable global allEntries
+        entry = allEntries.find(e => e.id == entryId);
+    }
     if (entry) {
         archivos = entry.archivos || entry.fotos || [];
         found = true;
@@ -2869,6 +2911,153 @@ async function downloadAllImages(imagenes) {
     }
 }
 
+// ===== Descarga de adjuntos del filtro actual (ZIP) =====
+
+// Contar adjuntos del último filtro y mostrar/ocultar el botón
+function updateDownloadAttachmentsBtn() {
+    const btn = document.getElementById('downloadAttachments');
+    if (!btn) return;
+
+    const files = collectFilteredAttachments();
+    if (hasActiveFilters && files.length > 0) {
+        btn.style.display = 'inline-block';
+        btn.textContent = `📦 Descargar adjuntos (${files.length})`;
+        btn.disabled = false;
+    } else {
+        btn.style.display = 'none';
+        btn.disabled = false;
+    }
+}
+
+// Recopilar todos los adjuntos de las entradas filtradas
+function collectFilteredAttachments() {
+    const files = [];
+
+    (lastFilteredEntries || []).forEach(entry => {
+        const adjuntos = Array.isArray(entry.archivos)
+            ? entry.archivos
+            : (Array.isArray(entry.fotos) ? entry.fotos : []);
+
+        adjuntos.forEach(archivo => {
+            const url = typeof archivo === 'string' ? archivo : archivo.url;
+            if (!url) return;
+            files.push({
+                url,
+                name: typeof archivo === 'string' ? '' : (archivo.name || ''),
+                folio: entry.folio || entry.id
+            });
+        });
+    });
+
+    return files;
+}
+
+async function downloadFilteredAttachments() {
+    const btn = document.getElementById('downloadAttachments');
+
+    if (typeof JSZip === 'undefined') {
+        showNotification('⚠️ La librería de compresión no está disponible. Recarga la página.', 'warning');
+        return;
+    }
+
+    const files = collectFilteredAttachments();
+    if (files.length === 0) {
+        showNotification('ℹ️ El filtro actual no tiene adjuntos para descargar', 'info');
+        return;
+    }
+
+    // Aviso si hay más de 300 archivos (riesgo de memoria en el navegador)
+    if (files.length > 300) {
+        const ok = confirm(
+            `⚠️ El filtro actual tiene ${files.length} archivos adjuntos.\n\n` +
+            `Descargarlos todos puede tardar bastante y ocupar mucha memoria en el navegador.\n\n` +
+            `¿Deseas continuar?`
+        );
+        if (!ok) return;
+    } else {
+        const ok = confirm(`¿Deseas descargar ${files.length} archivos adjuntos en un archivo .zip?`);
+        if (!ok) return;
+    }
+
+    const zip = new JSZip();
+
+    // Carpetas por folio
+    const folders = {};
+    const getFolder = (folio) => {
+        const safeFolio = String(folio).replace(/[\\/:*?"<>|]/g, '_');
+        if (!folders[safeFolio]) folders[safeFolio] = zip.folder(safeFolio);
+        return folders[safeFolio];
+    };
+
+    if (btn) btn.disabled = true;
+
+    let descargados = 0;
+    let fallidos = 0;
+    const total = files.length;
+
+    showNotification(`📦 Descargando 0/${total}...`, 'info', 3000);
+
+    // Descarga SECUENCIAL: evita saturar la red/R2 y permite progreso real
+    for (let i = 0; i < total; i++) {
+        const archivo = files[i];
+        let name = archivo.name;
+
+        if (!name) {
+            try {
+                name = decodeURIComponent(archivo.url.split('/').pop().split('?')[0]) || `archivo_${i + 1}`;
+            } catch (e) {
+                name = `archivo_${i + 1}`;
+            }
+        }
+
+        try {
+            const response = await fetch(archivo.url);
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            const blob = await response.blob();
+            getFolder(archivo.folio).file(name, blob);
+            descargados++;
+        } catch (error) {
+            console.error(`Error descargando ${name}:`, error);
+            fallidos++;
+        }
+
+        // Actualizar progreso cada 5 archivos
+        if ((i + 1) % 5 === 0 || i === total - 1) {
+            showNotification(`📦 Descargando ${i + 1}/${total}...`, 'info', 3000);
+        }
+    }
+
+    if (descargados === 0) {
+        showNotification('❌ No se pudo descargar ningún archivo', 'error');
+        if (btn) btn.disabled = false;
+        return;
+    }
+
+    try {
+        showNotification('🚀 Generando archivo ZIP...', 'info', 5000);
+        const content = await zip.generateAsync({ type: 'blob' });
+        const zipName = `bitacora_adjuntos_${new Date().getTime()}.zip`;
+
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(content);
+        link.download = zipName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(link.href);
+
+        const resumen = fallidos > 0
+            ? `✅ ZIP descargado: ${descargados} archivos (${fallidos} fallidos)`
+            : `✅ ZIP descargado con ${descargados} archivos`;
+        showNotification(resumen, fallidos > 0 ? 'warning' : 'success', 5000);
+    } catch (error) {
+        console.error('Error generando ZIP:', error);
+        showNotification('❌ Error al generar el archivo ZIP', 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
 // Ver imagen en pantalla completa
 function viewImageFullscreen(url, name) {
     const fullscreenModal = document.createElement('div');
@@ -2934,18 +3123,17 @@ async function editEntry(entryId) {
     // Mostrar formulario primero
     showForm();
     
-    // Llenar formulario con datos existentes - usar fecha directamente
-    let fechaParaFormulario = data.fecha;
-    
-    // Si viene con timezone Z o con segundos, ajustar al formato datetime-local
-    if (data.fecha && (data.fecha.includes('Z') || data.fecha.includes('.'))) {
-        const fecha = new Date(data.fecha);
-        const year = fecha.getFullYear();
-        const month = String(fecha.getMonth() + 1).padStart(2, '0');
-        const day = String(fecha.getDate()).padStart(2, '0');
-        const hours = String(fecha.getHours()).padStart(2, '0');
-        const minutes = String(fecha.getMinutes()).padStart(2, '0');
-        fechaParaFormulario = `${year}-${month}-${day}T${hours}:${minutes}`;
+    // Llenar formulario con datos existentes.
+    // 'fecha' guarda la hora local con etiqueta +00:00 (ej: 2026-04-21T01:30:00+00:00).
+    // datetime-local solo acepta "YYYY-MM-DDTHH:mm" sin zona y RECHAZA el sufijo +00:00
+    // (el campo quedaría vacío), así que se recorta el sufijo de forma textual.
+    // Nunca con new Date(), que desplazaría la hora 5 horas hacia atrás.
+    let fechaParaFormulario = data.fecha || '';
+    const matchFechaLocal = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(fechaParaFormulario);
+    if (matchFechaLocal) {
+        fechaParaFormulario = `${matchFechaLocal[1]}T${matchFechaLocal[2]}`;
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(fechaParaFormulario)) {
+        fechaParaFormulario += 'T00:00';
     }
     
     document.getElementById('fecha').value = fechaParaFormulario;
@@ -3734,15 +3922,64 @@ if (document.getElementById('descripcion')) {
 let allSelectedFiles = [];
 
 // Preview de archivos
+const MAX_IMAGENES_POR_ENTRADA = 20;
+
+// Determinar si un archivo (objeto o string) es imagen
+function esImagenArchivo(archivo) {
+    if (!archivo) return false;
+    if (typeof archivo === 'string') return /\.(jpg|jpeg|png|gif|webp)(\?|#|$)/i.test(archivo);
+    if (archivo.type && archivo.type.startsWith('image/')) return true;
+    return /\.(jpg|jpeg|png|gif|webp)$/i.test(archivo.name || '');
+}
+
 document.getElementById('fotos')?.addEventListener('change', function(e) {
     const files = e.target.files;
     const preview = document.getElementById('photoPreview');
     const grid = document.getElementById('photoPreviewGrid');
     const form = document.getElementById('bitacoraForm');
     const isEditMode = form.dataset.editId;
-    
+
+    // ===== LÍMITE DE IMÁGENES POR ENTRADA =====
+    // Contar imágenes que ya existen en la entrada (solo en edición y si se conservan)
+    let imagenesExistentes = 0;
+    if (isEditMode) {
+        const keepCb = document.getElementById('keepPhotosCheckbox');
+        if (!keepCb || keepCb.checked) {
+            try {
+                const fotosExistentes = JSON.parse(form.dataset.existingPhotos || '[]');
+                imagenesExistentes = fotosExistentes.filter(esImagenArchivo).length;
+            } catch (err) { imagenesExistentes = 0; }
+        }
+    }
+
+    // Contar imágenes ya acumuladas en la selección actual
+    const imagenesYaSeleccionadas = allSelectedFiles.filter(esImagenArchivo).length;
+    let disponibles = MAX_IMAGENES_POR_ENTRADA - imagenesExistentes - imagenesYaSeleccionadas;
+
+    const archivosAceptados = [];
+    let imagenesRechazadas = 0;
+
+    Array.from(files).forEach(file => {
+        if (esImagenArchivo(file) && disponibles <= 0) {
+            imagenesRechazadas++;
+            return;
+        }
+        if (esImagenArchivo(file)) {
+            disponibles--;
+        }
+        archivosAceptados.push(file);
+    });
+
+    if (imagenesRechazadas > 0) {
+        alert(`⚠️ Límite alcanzado: solo puedes tener ${MAX_IMAGENES_POR_ENTRADA} imágenes por entrada.\n\n` +
+              `No se agregaron ${imagenesRechazadas} imagen(es). Los demás archivos (PDF, Word, etc.) sí se permiten.`);
+    }
+    // ================= =====================
+
     // Acumular archivos nuevos con los existentes
-    allSelectedFiles = [...allSelectedFiles, ...Array.from(files)];
+    allSelectedFiles = [...allSelectedFiles, ...archivosAceptados];
+    // Limpiar el input para poder volver a elegir el mismo archivo
+    e.target.value = '';
     
     if (allSelectedFiles.length > 0) {
         preview.style.display = 'block';
@@ -3795,13 +4032,18 @@ document.getElementById('fotos')?.addEventListener('change', function(e) {
         
         // Si estamos en modo edición, actualizar el texto informativo
         const fileInfo = preview.querySelector('.file-info');
+        const imagenesSel = allSelectedFiles.filter(esImagenArchivo).length;
+        const contador = `📸 ${imagenesSel}/${MAX_IMAGENES_POR_ENTRADA} imágenes`;
+
         if (isEditMode && fileInfo) {
             const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
             if (keepPhotosCheckbox && keepPhotosCheckbox.checked) {
-                fileInfo.textContent = `ℹ️ ${allSelectedFiles.length} archivos nuevos se agregarán a los existentes`;
+                fileInfo.textContent = `ℹ️ ${allSelectedFiles.length} archivos nuevos se agregarán a los existentes — ${contador}`;
             } else {
-                fileInfo.textContent = `⚠️ ${allSelectedFiles.length} archivos nuevos reemplazarán los existentes`;
+                fileInfo.textContent = `⚠️ ${allSelectedFiles.length} archivos nuevos reemplazarán los existentes — ${contador}`;
             }
+        } else if (fileInfo) {
+            fileInfo.textContent = `${allSelectedFiles.length} archivo(s) seleccionado(s) — ${contador}`;
         }
     } else {
         preview.style.display = 'none';
@@ -3895,6 +4137,7 @@ document.getElementById('fechaFinalFilter')?.addEventListener('change', () => {
     searchTimeout = setTimeout(filterAndDisplayEntries, 500);
 });
 document.getElementById('downloadPdf')?.addEventListener('click', downloadPDF);
+document.getElementById('downloadAttachments')?.addEventListener('click', downloadFilteredAttachments);
 document.getElementById('clearFilters')?.addEventListener('click', async () => {
     console.log('🔄 Limpiando filtros...');
     
@@ -5960,37 +6203,25 @@ function hideMainCommentFilesPreview() {
     }
 }
 
-// Función para formatear fechas con zona horaria local
+// Función para formatear la fecha de una entrada.
+// 'fecha' guarda la hora local (Bogotá) con etiqueta +00:00, por lo que se muestra el
+// valor crudo: es exactamente lo que el usuario digitó y coincide con la tabla desktop,
+// con el PDF y con el rango que usa el filtro de fechas.
 function formatearFechaLocal(fechaString) {
     if (!fechaString) return 'Fecha no disponible';
-    
-    // console.log('🔍 Fecha original recibida:', fechaString);
-    // console.log('🔍 Tipo de dato:', typeof fechaString);
-    
-    const fecha = new Date(fechaString);
-    if (isNaN(fecha.getTime())) {
-        // console.log('❌ Fecha inválida al crear Date');
-        return 'Fecha inválida';
-    }
-    
-    // console.log('✅ Date object creado:', fecha);
-    // console.log('✅ Hora del Date:', fecha.getHours(), ':', fecha.getMinutes());
-    
-    const zonaHoraria = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const fechaFormateada = fecha.toLocaleString('es-CO', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-        timeZone: zonaHoraria
-    });
-    
-    const resultado = fechaFormateada;
-    // console.log('🎯 Fecha formateada final:', resultado);
-    
-    return resultado;
+
+    const partes = String(fechaString).split('T');
+    const datePart = partes[0];
+    const timePart = partes[1] || '';
+
+    const fecha = datePart.split('-');
+    if (fecha.length !== 3) return 'Fecha inválida';
+
+    const [year, month, day] = fecha;
+    if (!timePart) return `${day}/${month}/${year}`;
+
+    const hora = timePart.split(':');
+    return `${day}/${month}/${year} ${hora[0]}:${hora[1] || '00'}`;
 }
 
 // Función para cargar TODAS las entradas filtradas de la base de datos
@@ -6024,13 +6255,14 @@ async function loadAllFilteredEntries() {
             query = query.eq('ubicacion', ubicacionFilter);
         }
         
+        // 'fecha' guarda hora local con etiqueta +00:00: usar el día crudo (ver comentario en filterAndDisplayEntries)
         if (fechaInicioFilter) {
-            const inicio = new Date(fechaInicioFilter + 'T00:00:00').toISOString();
+            const inicio = fechaInicioFilter + 'T00:00:00.000Z';
             query = query.gte('fecha', inicio);
         }
         
         if (fechaFinalFilter) {
-            const fin = new Date(fechaFinalFilter + 'T23:59:59').toISOString();
+            const fin = fechaFinalFilter + 'T23:59:59.999Z';
             query = query.lte('fecha', fin);
         }
         
@@ -6356,16 +6588,22 @@ async function downloadPDF() {
         }
         
         // Crear texto de filtros
+        // Los inputs type="date" vienen como YYYY-MM-DD; formatearlos directamente.
+        // (new Date('YYYY-MM-DD') se parsea como medianoche UTC y en Bogotá mostraba el día anterior)
+        const fechaCorta = iso => {
+            const p = String(iso).split('-');
+            return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(iso);
+        };
         const filtersInfo = [];
         if (searchTerm) filtersInfo.push(`Búsqueda: "${searchTerm}"`);
         if (tipoFilter) filtersInfo.push(`Tipo: ${tipoFilter}`);
         if (ubicacionFilter) filtersInfo.push(`Ubicación: ${ubicacionFilter}`);
         if (fechaInicioFilter && fechaFinalFilter) {
-            filtersInfo.push(`Rango: ${new Date(fechaInicioFilter).toLocaleDateString('es-ES')} - ${new Date(fechaFinalFilter).toLocaleDateString('es-ES')}`);
+            filtersInfo.push(`Rango: ${fechaCorta(fechaInicioFilter)} - ${fechaCorta(fechaFinalFilter)}`);
         } else if (fechaInicioFilter) {
-            filtersInfo.push(`Desde: ${new Date(fechaInicioFilter).toLocaleDateString('es-ES')}`);
+            filtersInfo.push(`Desde: ${fechaCorta(fechaInicioFilter)}`);
         } else if (fechaFinalFilter) {
-            filtersInfo.push(`Hasta: ${new Date(fechaFinalFilter).toLocaleDateString('es-ES')}`);
+            filtersInfo.push(`Hasta: ${fechaCorta(fechaFinalFilter)}`);
         }
         const filtersText = filtersInfo.length > 0 ? filtersInfo.join(' | ') : 'Todos los registros';
         

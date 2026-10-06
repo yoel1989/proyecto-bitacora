@@ -655,6 +655,7 @@ main {
   }
 
   .download-pdf-btn,
+  .download-attachments-btn,
   .clear-filters-btn {
     flex: 1;
     text-align: center;
@@ -668,6 +669,7 @@ main {
   }
 
   .download-pdf-btn,
+  .download-attachments-btn,
   .clear-filters-btn {
     width: 100%;
     margin-right: 0;
@@ -809,6 +811,29 @@ main {
 .download-pdf-btn:hover {
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+}
+
+.download-attachments-btn {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.download-attachments-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.download-attachments-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .clear-filters-btn {
@@ -1176,23 +1201,33 @@ main {
 .more-photos {
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   color: white;
-  padding: 4px 8px;
-  border-radius: 10px;
-  font-size: 0.7rem;
-  font-weight: bold;
+  padding: 4px 7px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3);
-  display: inline-block !important;
-  border: 1px solid #fff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5);
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
   position: relative;
   z-index: 5;
+  min-width: 26px;
+  line-height: 1;
+  animation: morePhotosPulse 2s ease-in-out infinite;
+}
+
+@keyframes morePhotosPulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(99, 102, 241, 0.5); }
+  50% { box-shadow: 0 2px 16px rgba(139, 92, 246, 0.85); }
 }
 
 .more-photos:hover {
-  background: linear-gradient(135deg, #5a67d8, #6b46a1);
-  transform: scale(1.1);
-  box-shadow: 0 3px 8px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  transform: scale(1.15);
+  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.6);
 }
 
 .no-photos {
@@ -1335,29 +1370,35 @@ main {
 }
 
 .download-all-btn {
-  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  background: linear-gradient(135deg, #059669, #10b981);
   color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 20px;
+  border: 2px solid #047857;
+  padding: 10px 20px;
+  border-radius: 25px;
   cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   display: flex;
   align-items: center;
   gap: 8px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.2);
+  box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4);
+  animation: downloadBtnPulse 2s ease-in-out infinite;
+}
+
+@keyframes downloadBtnPulse {
+  0%, 100% { box-shadow: 0 4px 14px rgba(5, 150, 105, 0.4); }
+  50% { box-shadow: 0 4px 22px rgba(5, 150, 105, 0.75); }
 }
 
 .download-all-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 15px rgba(39, 174, 96, 0.3);
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 20px rgba(5, 150, 105, 0.6);
   filter: brightness(1.1);
 }
 
 .download-all-btn:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
 .close-modal {
@@ -1765,6 +1806,21 @@ main {
   margin: 0;
 }
 
+.file-limit-hint {
+  color: #64748b;
+  font-size: 0.8rem;
+  margin: 0.4rem 0 0;
+  padding: 6px 10px;
+  background: #eef2ff;
+  border-left: 3px solid #6366f1;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.file-limit-hint strong {
+  color: #4f46e5;
+}
+
 /* Update warning para fotos */
 .update-warning {
   margin-top: 1rem;
@@ -2151,10 +2207,11 @@ main {
     background: #e9ecef;
   }
 
-  .mobile-more-photos {
+  /* Botón "+N" de la tarjeta móvil: la clase debe coincidir con la que genera el JS
+     (more-photos-mobile). Antes se llamaba .mobile-more-photos y nunca aplicaba. */
+  .more-photos-mobile {
     background: linear-gradient(135deg, #6366f1, #8b5cf6);
     color: white;
-    padding: 8px 12px;
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: bold;
@@ -2163,18 +2220,20 @@ main {
     display: flex !important;
     align-items: center;
     justify-content: center;
+    width: 50px;
     min-width: 50px;
     height: 50px;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
     border: 2px solid #fff;
     position: relative;
     z-index: 10;
+    flex-shrink: 0;
   }
 
-  .mobile-more-photos:hover {
-    background: linear-gradient(135deg, #5a67d8, #6b46a1);
+  .more-photos-mobile:hover {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
   }
 
   .mobile-actions {
@@ -2353,11 +2412,6 @@ main {
 .mini-photo {
   width: 35px;
   height: 25px;
-}
-
-.more-photos {
-  font-size: 0.55rem;
-  padding: 1px 3px;
 }
 
 @media (max-width: 480px) {

@@ -5115,6 +5115,21 @@ html {
   box-sizing: border-box;
 }
 
+/* El autofill de Chrome/Safari pinta los inputs guardados de blanco: en las
+   pantallas oscuras lo forzamos a mantener el fondo oscuro para que el campo
+   no se vea blanco y el ojito conserve contraste. */
+#loginScreen input:-webkit-autofill,
+#recoverPasswordScreen input:-webkit-autofill,
+#loginScreen input:-webkit-autofill:hover,
+#recoverPasswordScreen input:-webkit-autofill:hover,
+#loginScreen input:-webkit-autofill:focus,
+#recoverPasswordScreen input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /* button.password-toggle (elemento+clase) gana especificidad sobre
    .login-container button, que le pintaría el fondo morado degradado. */
 button.password-toggle {
@@ -5185,7 +5200,7 @@ button.password-toggle.showing .eye-closed {
 /* En login y pantalla de recuperación (fondo oscuro) */
 #loginScreen button.password-toggle,
 #recoverPasswordScreen button.password-toggle {
-  color: rgba(255, 255, 255, 0.6);
+  color: #e2e8f0;
 }
 
 #loginScreen button.password-toggle:hover,

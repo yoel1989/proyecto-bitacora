@@ -2,13 +2,18 @@
 // Importar Resend para envío de emails
 const { createClient } = require('@supabase/supabase-js');
 const { Resend } = require('resend');
+require('dotenv').config();
 
 // Configuración
 const SUPABASE_URL = 'https://mqxguprzpypcyyusvfrf.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xeGd1cHJ6cHlwY3l5dXN2ZnJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNjc4NjEsImV4cCI6MjA4MTg0Mzg2MX0.OXxl1n3a0Y5HtoUUBnm-vEE1WvAY86VJvdQ0phAsoSY';
 const FRONTEND_URL = 'https://bitacoradigital1509.com';
 
-const resend = new Resend(process.env.RESEND_API_KEY || 're_bKJkXN7K_MqTjYz8Gt1eiJjW7HBm2GY4n');
+// ⚠️ La API key se lee de RESEND_API_KEY; nunca escribirla en el código
+if (!process.env.RESEND_API_KEY) {
+    console.warn('⚠️ RESEND_API_KEY no está configurada. Los correos no se podrán enviar.');
+}
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // Verificar conexión con Resend
 console.log('✅ Resend configurado para envío de emails');
@@ -172,7 +177,7 @@ async function probarEmail() {
       // Enviar a un email de prueba si no hay usuarios
       const { data, error: sendError } = await resend.emails.send({
         from: 'Bitacora de Obra <bitacora@bitacoradigital1509.com>',
-        to: [process.env.TEST_EMAIL || 'yesidgaviria00@gmail.com'],
+        to: [process.env.TEST_EMAIL || 'escobaryoel7@gmail.com'],
         subject: `🧪 PRUEBA - ${entradaPrueba.titulo}`,
         html: generarContenidoEmailMasivo([{ nombre: 'Usuario de Prueba' }], entradaPrueba)
       });

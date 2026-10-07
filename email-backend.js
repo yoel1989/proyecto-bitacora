@@ -2,9 +2,14 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { Resend } = require('resend');
+require('dotenv').config();
 
-// Inicializar Resend (deberás obtener tu API key)
-const resend = new Resend('re_bKJkXN7K_MqTjYz8Gt1eiJjW7HBm2GY4n');
+// Inicializar Resend (la API key se lee de la variable de entorno RESEND_API_KEY)
+// ⚠️ Nunca escribir la API key directamente en el código
+if (!process.env.RESEND_API_KEY) {
+    console.warn('⚠️ RESEND_API_KEY no está configurada. Los correos no se podrán enviar.');
+}
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 const PORT = process.env.PORT || 3001;

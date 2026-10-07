@@ -3,14 +3,31 @@
 
 // Registrar Service Worker para modo offline (y actualización automática)
 if ('serviceWorker' in navigator) {
-    // Recargar automáticamente cuando un Service Worker nuevo toma el control:
-    // así las actualizaciones se aplican solas, sin pedirle al usuario limpiar caché.
-    let refreshingSW = false;
+    // Aviso de nueva versión: cuando un Service Worker nuevo toma el control,
+    // avisamos al usuario que recargue para ver los cambios (sin limpiar caché).
+    let updateBannerShown = false;
+
+    function showUpdateBanner() {
+        if (updateBannerShown) return;
+        updateBannerShown = true;
+        const banner = document.getElementById('updateBanner');
+        if (!banner) return;
+        banner.style.display = 'flex';
+        const btn = document.getElementById('updateBannerBtn');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                btn.disabled = true;
+                console.log('🔄 Recargando para aplicar la nueva versión...');
+                window.location.reload();
+            });
+        }
+    }
+
+    // Cuando un Service Worker nuevo toma el control hay una versión nueva:
+    // mostrar el aviso para que el usuario recargue.
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshingSW) return;
-        refreshingSW = true;
-        console.log('🔄 Service Worker actualizado: recargando la app automáticamente...');
-        window.location.reload();
+        console.log('🔄 Nueva versión detectada: avisando al usuario...');
+        showUpdateBanner();
     });
 
     window.addEventListener('load', () => {
@@ -18,6 +35,14 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./sw.js')
             .then((registration) => {
                 console.log('✅ Service Worker registrado:', registration.scope);
+
+                // Respaldo: escuchar aviso directo del Service Worker
+                navigator.serviceWorker.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'APP_UPDATE_AVAILABLE') {
+                        console.log('🔄 Aviso del SW: nueva versión disponible');
+                        showUpdateBanner();
+                    }
+                });
 
                 // Comprobar actualizaciones del SW aunque la app siga abierta (SPA)
                 setInterval(() => {

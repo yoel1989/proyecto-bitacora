@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>📋 Bitácora de Obra Consorcio Malla Vial</title>
     <link rel="stylesheet" href="styles-new.css?v=1">
-    <link rel="stylesheet" href="styles.css?v=20261006j">
+    <link rel="stylesheet" href="styles.css?v=20261006k">
     <link rel="stylesheet" href="comments-buttons.css?v=20250117">
     <link rel="stylesheet" href="comments-modal.css?v=20250118a">
     <script>
@@ -42,7 +42,7 @@
                 console.log('✅ config.js cargado');
                 // Cargar app.js
                 const appScript = document.createElement('script');
-                appScript.src = 'app.js?v=20261006o';
+                appScript.src = 'app.js?v=20261006p';
                 appScript.onload = () => console.log('✅ app.js cargado - VERSION CONECTIVIDAD_REAL');
                 appScript.onerror = () => console.error('❌ Error cargando app.js');
                 document.head.appendChild(appScript);
@@ -59,6 +59,12 @@
         <!-- INDICADOR DE MODO OFFLINE -->
         <div id="offlineIndicator" style="position: fixed; top: 50px; right: 10px; background: orange; color: black; padding: 8px 12px; border-radius: 5px; z-index: 9999; font-size: 12px; font-weight: bold; display: none;">
             🔌 MODO OFFLINE ACTIVADO
+        </div>
+
+        <!-- AVISO DE NUEVA VERSIÓN -->
+        <div id="updateBanner" style="display: none;" role="status" aria-live="polite">
+            <span>🔄 Hay una nueva versión de la bitácora disponible. Recarga para ver los cambios.</span>
+            <button type="button" id="updateBannerBtn">Recargar ahora</button>
         </div>
 
         <!-- Login Screen -->

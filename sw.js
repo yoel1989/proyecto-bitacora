@@ -73,16 +73,17 @@ self.addEventListener('activate', (event) => {
             console.log('✅ Service Worker activado');
             return self.clients.claim();
         }).then(() => {
-            // Recargar todas las pestañas/ventanas abiertas para aplicar la nueva
-            // versión automáticamente (funciona incluso con la versión anterior de la app).
+            // Avisar a las pestañas abiertas que hay una versión nueva: la app
+            // mostrará un aviso para que el usuario recargue (sin limpiar caché).
             return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
                 .then((clients) => {
-                    return Promise.all(clients.map((client) => {
-                        if (client.url && /^https?:/.test(client.url)) {
-                            return client.navigate(client.url).catch(() => {});
+                    clients.forEach((client) => {
+                        try {
+                            client.postMessage({ type: 'APP_UPDATE_AVAILABLE' });
+                        } catch (e) {
+                            // Sin soporte de postMessage: la página usará controllerchange
                         }
-                        return Promise.resolve();
-                    }));
+                    });
                 });
         })
     );

@@ -84,6 +84,11 @@ Para que el correo de "recuperar contraseña" funcione:
 3. En **Authentication** → **Providers** → **Email**, confirma que el correo de recuperación esté habilitado.
 4. La app ya maneja la redirección sola: el enlace del correo abre la app y muestra el formulario
    para definir la nueva contraseña (no hace falta una página aparte).
+5. **Opcional pero recomendado — SMTP personalizado con Resend**: con el proveedor integrado de
+   Supabase el límite es 2 correos/hora/proyecto y el remitente es genérico (puede caer en spam).
+   Configura SMTP de Resend en **Authentication → Settings → SMTP Settings**
+   (`smtp.resend.com`, puerto 465, usuario `resend`, contraseña = API key `re_...`, remitente de
+   tu dominio verificado). Guía completa en `EMAIL_SETUP_GUIDE.md` → sección 7.
 
 ---
 

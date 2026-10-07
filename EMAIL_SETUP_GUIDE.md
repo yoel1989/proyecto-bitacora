@@ -84,6 +84,47 @@ Reemplaza `https://tu-backend-url.com` con la URL real de tu backend desplegado.
 - Si hay errores, se mostrarán en la consola
 - El frontend seguirá funcionando aunque fallen las notificaciones
 
+## 7. Configurar SMTP de Resend en Supabase (correos de autenticación)
+
+> ⚠️ Los correos de **autenticación** de Supabase (confirmación de registro, recuperación de
+> contraseña, invitaciones) **NO pasan por tu backend**: los envía el propio Supabase.
+> Por defecto usa su proveedor integrado, que tiene límites (2 correos/hora/proyecto) y un
+> remitente genérico que suele caer en **spam**.
+
+Para que esos correos salgan desde **tu dominio** con Resend:
+
+### Paso 1: Verificar tu dominio en Resend
+1. Resend → **Domains** → **Add Domain** (ej: `tudominio.com`)
+2. Sigue las instrucciones para agregar los registros DNS (SPF, DKIM, DMARC)
+3. Espera a que el estado del dominio sea **Verified**
+
+### Paso 2: Crear una API Key
+1. Resend → **API Keys** → **Create API Key** (ej: nombre `Supabase SMTP`)
+2. Copia la clave (empieza con `re_`)
+
+### Paso 3: Configurar SMTP en Supabase
+1. Supabase → **Authentication** → **Settings** → **SMTP Settings**
+2. Configura los campos:
+   - **Host**: `smtp.resend.com`
+   - **Port**: `465` (SSL) — o `587` (TLS)
+   - **User**: `resend`
+   - **Password**: tu API Key de Resend (`re_...`)
+   - **Sender email**: un correo del dominio verificado, ej: `notificaciones@tudominio.com`
+   - **Sender name**: `Bitácora de Obra`
+3. Activa **Secure connection / SSL** según el puerto que elegiste
+4. Guarda: Supabase te enviará un **correo de prueba** al correo configurado como destinatario
+   de pruebas (Authentication → Settings → test address)
+
+### Notas
+- El remitente **debe** pertenecer a un dominio verificado en Resend.
+- Sin dominio verificado solo puedes usar `onboarding@resend.dev` como remitente, y los correos
+  solo llegan a tu propia cuenta (útil para probar, no para producción).
+- Con SMTP personalizado el límite deja de ser 2 correos/hora; puedes ajustar los límites en
+  Supabase → Authentication → **Rate Limits**.
+- Plan gratuito de Resend: ~100 correos/día · 3000/mes.
+- La recuperación de contraseña funciona igual: el usuario recibe el enlace y la app muestra
+  el formulario para crear la nueva contraseña (no requiere página extra).
+
 ## Notas importantes
 
 - Gmail tiene límites de envío (500 emails/día para cuentas gratuitas)

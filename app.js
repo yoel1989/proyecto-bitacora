@@ -7785,8 +7785,25 @@ window.cancelPasswordRecovery = cancelPasswordRecovery;
 window.deleteInvitationCode = deleteInvitationCode;
 window.copyGeneratedCode = copyGeneratedCode;
 
+// Ojito mostrar/ocultar contraseñas (login, registro, nueva contraseña)
+function initPasswordToggles() {
+    const toggles = document.querySelectorAll('.password-toggle');
+    toggles.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            const input = document.getElementById(btn.getAttribute('data-target'));
+            if (!input) return;
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.classList.toggle('showing', show);
+            btn.setAttribute('aria-label', show ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        });
+    });
+}
+
 // Iniciar
 console.log('🚀 Iniciando aplicación...');
+initPasswordToggles();
 
 // Si el usuario llegó por un enlace de recuperación de contraseña, mostrar
 // directamente el formulario para definir la nueva contraseña.

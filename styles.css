@@ -5096,4 +5096,71 @@ html {
     position: sticky;
     top: 0;
     z-index: 100;
+}
 
+
+
+/* ===== OJITO MOSTRAR/OCULTAR CONTRASEÑAS ===== */
+.password-field {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.password-field input {
+  padding-right: 2.75rem !important;
+  box-sizing: border-box;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #64748b;
+  border-radius: 6px;
+  transition: color 0.2s ease;
+}
+
+.password-toggle:hover {
+  color: #6366f1;
+}
+
+.password-toggle svg {
+  width: 20px;
+  height: 20px;
+  display: none;
+}
+
+.password-toggle .eye-open {
+  display: block;
+}
+
+.password-toggle.showing .eye-open {
+  display: none;
+}
+
+.password-toggle.showing .eye-closed {
+  display: block;
+}
+
+/* En login y pantalla de recuperación (fondo oscuro) */
+#loginScreen .password-toggle,
+#recoverPasswordScreen .password-toggle {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+#loginScreen .password-toggle:hover,
+#recoverPasswordScreen .password-toggle:hover {
+  color: #ffffff;
+}

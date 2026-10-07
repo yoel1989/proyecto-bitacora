@@ -5109,11 +5109,15 @@ html {
 }
 
 .password-field input {
+  width: 100%;
+  max-width: 100%;
   padding-right: 2.75rem !important;
   box-sizing: border-box;
 }
 
-.password-toggle {
+/* button.password-toggle (elemento+clase) gana especificidad sobre
+   .login-container button, que le pintaría el fondo morado degradado. */
+button.password-toggle {
   position: absolute;
   top: 50%;
   right: 0.5rem;
@@ -5123,44 +5127,70 @@ html {
   justify-content: center;
   width: 2rem;
   height: 2rem;
+  min-width: 2rem;
+  min-height: 2rem;
+  max-width: 2rem;
+  max-height: 2rem;
   padding: 0;
+  margin: 0;
   border: none;
+  border-radius: 50%;
   background: transparent;
+  box-shadow: none;
   cursor: pointer;
   color: #64748b;
-  border-radius: 6px;
-  transition: color 0.2s ease;
+  font-size: 0;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 
-.password-toggle:hover {
+button.password-toggle:hover,
+button.password-toggle:focus-visible {
   color: #6366f1;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  transform: translateY(-50%) scale(1.12);
+  outline: none;
 }
 
-.password-toggle svg {
+button.password-toggle:active {
+  transform: translateY(-50%);
+  filter: none;
+  box-shadow: none;
+}
+
+button.password-toggle svg {
   width: 20px;
   height: 20px;
   display: none;
+  vertical-align: middle;
 }
 
-.password-toggle .eye-open {
+button.password-toggle .eye-open {
   display: block;
 }
 
-.password-toggle.showing .eye-open {
+button.password-toggle.showing .eye-open {
   display: none;
 }
 
-.password-toggle.showing .eye-closed {
+button.password-toggle.showing .eye-closed {
   display: block;
 }
 
 /* En login y pantalla de recuperación (fondo oscuro) */
-#loginScreen .password-toggle,
-#recoverPasswordScreen .password-toggle {
-  color: rgba(255, 255, 255, 0.55);
+#loginScreen button.password-toggle,
+#recoverPasswordScreen button.password-toggle {
+  color: rgba(255, 255, 255, 0.6);
 }
 
-#loginScreen .password-toggle:hover,
-#recoverPasswordScreen .password-toggle:hover {
+#loginScreen button.password-toggle:hover,
+#recoverPasswordScreen button.password-toggle:hover,
+#loginScreen button.password-toggle:focus-visible,
+#recoverPasswordScreen button.password-toggle:focus-visible {
   color: #ffffff;
 }

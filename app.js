@@ -3141,7 +3141,7 @@ function showAllArchivos(entryId, entryData) {
 
 // ============================================================
 // Deep-link: #ver-fotos=<id> abre la galería de fotos en tamaño
-// original. Lo usan los enlaces "Ver fotos" de los PDF generados.
+// original. Lo usan los enlaces "Ver adjuntos" de los PDF generados.
 // ============================================================
 let pendingVerFotosId = null;
 
@@ -7198,7 +7198,7 @@ async function downloadPDF() {
             pdf.text('Tipo', x + colWidths.tipo/2, y + 5, { align: 'center' }); x += colWidths.tipo;
             pdf.text('Ubicación', x + colWidths.ubica/2, y + 5, { align: 'center' }); x += colWidths.ubica;
             pdf.text('Usuario', x + colWidths.usuario/2, y + 5, { align: 'center' }); x += colWidths.usuario;
-            pdf.text('Fotos', x + colWidths.fotos/2, y + 5, { align: 'center' });
+            pdf.text('Adjuntos', x + colWidths.fotos/2, y + 5, { align: 'center' });
         };
 
         // Función para dibujar el encabezado en cada página
@@ -7213,7 +7213,7 @@ async function downloadPDF() {
             pdf.setTextColor(255, 255, 255);
             pdf.setFontSize(14);
             pdf.setFont('helvetica', 'bold');
-            pdf.text('BITACORA DE OBRA', pageWidth / 2, marginTop + 10, { align: 'center' });
+            pdf.text('BITACORA DE OBRA - CONSORCIO TITAN', pageWidth / 2, marginTop + 10, { align: 'center' });
             
             pdf.setFontSize(8);
             pdf.setFont('helvetica', 'normal');
@@ -7507,7 +7507,7 @@ async function downloadPDF() {
                     pdf.setTextColor(29, 78, 216);
                     pdf.setFont('helvetica', 'bold');
                     pdf.setFontSize(fs);
-                    pdf.textWithLink(`Ver fotos (${thumbsOK})`, colX.fotos + pad, labY + 2.6, { url: verFotosURL });
+                    pdf.textWithLink(`Ver adjuntos (${thumbsOK})`, colX.fotos + pad, labY + 2.6, { url: verFotosURL });
                     pdf.link(colX.fotos, currentY, colWidths.fotos, stripH, { url: verFotosURL });
                     pdf.setFont('helvetica', 'normal');
                 }
@@ -7515,7 +7515,7 @@ async function downloadPDF() {
                 pdf.setTextColor(130, 130, 130);
                 pdf.setFont('helvetica', 'italic');
                 pdf.setFontSize(fs);
-                pdf.text('Sin fotos', colX.fotos + pad, currentY + pad + baseOff);
+                pdf.text('Sin adjuntos', colX.fotos + pad, currentY + pad + baseOff);
                 pdf.setFont('helvetica', 'normal');
             }
             pdf.setTextColor(0, 0, 0);

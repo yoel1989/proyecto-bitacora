@@ -1161,6 +1161,8 @@ async function handleLogin(e) {
             getUserProfile().catch(err => console.warn('Error cargando perfil:', err)),
             loadBitacoraEntries().catch(err => console.warn('Error cargando entradas:', err))
         ]).then(() => {
+            // Reabrir la galería de fotos si el enlace del PDF quedó pendiente de sesión
+            resumePendingVerFotos();
             // Guardar sesión completa con rol en localStorage después de obtener perfil
             localStorage.setItem('bitacora_session', JSON.stringify({
                 user: {
@@ -3038,15 +3040,15 @@ function createDesktopTable(entries) {
 }
 
 // Mostrar todos los archivos de una entrada
-function showAllArchivos(entryId) {
+function showAllArchivos(entryId, entryData) {
     // console.log('Buscando archivos para entryId:', entryId);
     
     let archivos = [];
     let found = false;
     
-    // Buscar primero en las entradas filtradas (si hay filtro activo,
-    // la entrada NO está en allEntries)
-    let entry = (lastFilteredEntries || []).find(e => e.id == entryId);
+    // Prioridad: entrada pasada directamente (deep-link), luego entradas filtradas
+    // y por último la variable global allEntries
+    let entry = entryData || (lastFilteredEntries || []).find(e => e.id == entryId);
     if (!entry) {
         // Buscar en la variable global allEntries
         entry = allEntries.find(e => e.id == entryId);
@@ -3135,6 +3137,60 @@ function showAllArchivos(entryId) {
     } else {
         // console.log('No hay archivos para mostrar');
     }
+}
+
+// ============================================================
+// Deep-link: #ver-fotos=<id> abre la galería de fotos en tamaño
+// original. Lo usan los enlaces "Ver fotos" de los PDF generados.
+// ============================================================
+let pendingVerFotosId = null;
+
+async function handleVerFotosDeepLink() {
+    if (typeof location === 'undefined') return;
+    const m = location.hash.match(/^#ver-fotos=(.+)$/);
+    if (!m) return;
+    const id = decodeURIComponent(m[1]);
+    pendingVerFotosId = id;
+
+    // Buscar la entrada primero en memoria (entradas filtradas o todas)
+    let entry = (lastFilteredEntries || []).find(e => e.id == id) || allEntries.find(e => e.id == id);
+
+    // Si no está en memoria, intentar cargarla desde Supabase
+    if (!entry && typeof supabaseClient !== 'undefined' && supabaseClient) {
+        try {
+            const { data, error } = await supabaseClient
+                .from('bitacora')
+                .select('id, folio, titulo, archivos')
+                .eq('id', id)
+                .single();
+            if (!error && data) entry = data;
+        } catch (e) {
+            console.warn('No se pudo cargar la entrada desde el enlace de fotos:', e.message);
+        }
+    }
+
+    if (entry && (entry.archivos || entry.fotos || []).length > 0) {
+        showAllArchivos(id, entry);
+        // Limpiar el hash después de abrir la galería
+        try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    } else if (entry) {
+        showNotification('ℹ️ Esta entrada no tiene archivos adjuntos', 'info');
+    } else {
+        showNotification('🔐 Inicia sesión para ver las fotos del enlace', 'warning', 4000);
+    }
+}
+
+// Reanudar el enlace pendiente después de iniciar sesión (si al llegar no había sesión)
+function resumePendingVerFotos() {
+    if (pendingVerFotosId && location.hash.indexOf('#ver-fotos=') !== -1) {
+        handleVerFotosDeepLink();
+    }
+}
+
+// Escuchar cambios de hash (clic en el enlace del PDF con la app abierta)
+if (typeof window !== 'undefined') {
+    window.addEventListener('hashchange', handleVerFotosDeepLink);
+    window.addEventListener('load', handleVerFotosDeepLink);
 }
 
 // Función para descargar todas las imágenes en un archivo ZIP
@@ -6825,7 +6881,45 @@ function generateBatchHTML(entries, startNumber, filtersText) {
 }
 
 // Función para descargar PDF
+// Descarga la foto y la convierte en una miniatura dataURL (pequeña) para el PDF.
+// Así html2canvas no tiene que descargar ni decodificar las fotos en tamaño original,
+// lo que acelera mucho la generación y evita los timeouts.
+// Caché en memoria de miniaturas (acelera mucho las regeneraciones del PDF)
+const thumbDataURLCache = new Map();
+
+async function makeThumbDataURL(url) {
+    if (url && thumbDataURLCache.has(url)) return thumbDataURLCache.get(url);
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const resp = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (!resp.ok) return '';
+        const blob = await resp.blob();
+        const bitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = 120;
+        canvas.height = 120;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, 120, 120);
+        ctx.drawImage(bitmap, 0, 0, 120, 120);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        if (url && dataUrl) thumbDataURLCache.set(url, dataUrl);
+        return dataUrl;
+    } catch (e) {
+        console.warn('No se pudo generar miniatura:', (e && e.message) || e);
+        return '';
+    }
+}
+
+let pdfGenerando = false; // guard anti doble-clic: evita dos generaciones en paralelo
+
 async function downloadPDF() {
+    if (pdfGenerando) {
+        console.warn('[PDF Debug] Ya hay una generación de PDF en curso; clic ignorado.');
+        return;
+    }
     console.log('[PDF Debug] 1. Click en Descargar PDF detectado.');
     
     // Función auxiliar para escapar caracteres HTML peligrosos y evitar que rompan la tabla
@@ -6841,10 +6935,10 @@ async function downloadPDF() {
     };
 
     // Iniciando descarga de reporte detallado
-    // Verificar que las librerías necesarias estén cargadas
-    if (typeof window.jspdf === 'undefined' || typeof html2canvas === 'undefined' || !window.jspdf.jsPDF) {
-        console.error('[PDF Debug] Error: Librerías jsPDF o html2canvas no están cargadas en el entorno.');
-        showNotification('❌ Error: Las librerías para generar PDF no están disponibles', 'error');
+    // Verificar que la librería necesaria esté cargada
+    if (typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF) {
+        console.error('[PDF Debug] Error: La librería jsPDF no está cargada en el entorno.');
+        showNotification('❌ Error: La librería para generar PDF no está disponible', 'error');
         return;
     }
     
@@ -6863,6 +6957,7 @@ async function downloadPDF() {
         return;
     }
     
+    pdfGenerando = true;
     try {
         // Mostrar indicador de carga
         showNotification('📄 Iniciando generación de PDF... cargando entradas', 'info');
@@ -6985,20 +7080,126 @@ async function downloadPDF() {
             }
         }
 
-        // Estilos y anchos de columnas (Ajustados según solicitud)
+        // Estilos y anchos de columnas (TODAS las columnas + Fotos en miniatura)
         const colWidths = {
-            folio: usableWidth * 0.04,
-            fecha: usableWidth * 0.09,
-            titulo: usableWidth * 0.12,
-            desc: usableWidth * 0.50,
-            tipo: usableWidth * 0.05,
-            ubica: usableWidth * 0.07,
-            usuario: usableWidth * 0.06,
-            coment: usableWidth * 0.07
+            folio: usableWidth * 0.05,   // 9.5mm
+            fecha: usableWidth * 0.10,   // 19.0mm
+            titulo: usableWidth * 0.19,  // 36.1mm
+            hIni: usableWidth * 0.06,    // 11.4mm
+            hFin: usableWidth * 0.06,    // 11.4mm
+            tipo: usableWidth * 0.10,    // 19.0mm
+            ubica: usableWidth * 0.12,   // 22.8mm
+            usuario: usableWidth * 0.17, // 32.3mm
+            fotos: usableWidth * 0.15    // 28.5mm (3 miniaturas de 8mm) - suma EXACTA 100%
         };
 
         let currentY = marginTop;
         let currentPage = 1;
+
+        // ---------------- iconos/emoji en linea (imagen PNG) ----------------
+        // Caracteres invisibles: se eliminan del texto (jamás como '?')
+        const stripInvisible = (s) => String(s).replace(
+            /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u00AD\u034F\u061C\u180E\u200B-\u200F\u2028\u2029\u202A-\u202E\u2060-\u2064\u2066-\u206F\uFE00-\uFE0F\uFE20-\uFE2F\uFEFF\uFFA0]/g, '');
+        // Caracteres dibujables como texto plano (WinAnsi/Helvetica)
+        const WINANSI_KEEP = /[\x09\x0A\x20-\x7E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2020\u2021\u2022\u2026\u2030\u2039\u203A\u20AC\u2122\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u201A\u201E]/;
+        const hasImageCh = (s) => { for (const ch of String(s)) if (!WINANSI_KEEP.test(ch)) return true; return false; };
+
+        // Parte el texto en corridas: texto plano | icono (imagen)
+        const splitImageRuns = (s) => {
+            const runs = [];
+            let buf = '';
+            const arr = Array.from(String(s));
+            for (let i = 0; i < arr.length; i++) {
+                const ch = arr[i];
+                if (WINANSI_KEEP.test(ch)) { buf += ch; continue; }
+                if (buf) { runs.push({ t: buf }); buf = ''; }
+                const cp = ch.codePointAt(0);
+                let img = ch;
+                // pares de indicadores regionales (banderas)
+                if (cp >= 0x1F1E6 && cp <= 0x1F1FF && i + 1 < arr.length) {
+                    const cp2 = arr[i + 1].codePointAt(0);
+                    if (cp2 >= 0x1F1E6 && cp2 <= 0x1F1FF) img += arr[++i];
+                }
+                runs.push({ img: img });
+            }
+            if (buf) runs.push({ t: buf });
+            return runs;
+        };
+
+        // Ancho de un icono en mm (el mismo con el que se dibuja)
+        const EMW_MM = (img, size) => {
+            const cp = img.codePointAt(0);
+            return ((cp > 0xFFFF ? 1.02 : 0.9) * size) / 2.8346;
+        };
+        // Ancho total de un texto con iconos (usa la fuente activa)
+        const widthMixed = (s, size) => {
+            let w = 0;
+            for (const p of splitImageRuns(s)) w += p.img ? EMW_MM(p.img, size) : pdf.getTextWidth(p.t);
+            return w;
+        };
+
+        // Rasteriza un icono/emoji a PNG (una sola vez por caracter)
+        const emojiCache = new Map();
+        const rasterChar = (ch) => {
+            const key = String(ch);
+            if (emojiCache.has(key)) return emojiCache.get(key);
+            let url = '';
+            try {
+                const N = 128;
+                const cv = document.createElement('canvas');
+                cv.width = N; cv.height = N;
+                const ctx = cv.getContext('2d');
+                ctx.font = Math.round(N * 0.85) + 'px "Segoe UI Emoji","Noto Color Emoji","Apple Color Emoji",sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(key, N / 2, N / 2 + N * 0.04);
+                url = cv.toDataURL('image/png');
+            } catch (e) { url = ''; }
+            emojiCache.set(key, url);
+            return url;
+        };
+
+        // Dibuja texto con iconos en linea (texto seleccionable + PNG para iconos)
+        const drawRuns = (text, x, y, size, align) => {
+            const runs = splitImageRuns(text);
+            let cx = x;
+            if (align === 'center') cx = x - widthMixed(text, size) / 2;
+            for (const p of runs) {
+                if (p.img) {
+                    const url = rasterChar(p.img);
+                    if (url) {
+                        const side = EMW_MM(p.img, size);
+                        try { pdf.addImage(url, 'PNG', cx, y - side * 0.76, side, side); } catch (e) { }
+                        cx += side;
+                    }
+                } else {
+                    pdf.text(p.t, cx, y);
+                    cx += pdf.getTextWidth(p.t);
+                }
+            }
+        };
+
+        // Fila de etiquetas de columna: se dibuja al inicio de cada pagina y
+        // tambien al inicio de cada entrada, para identificar las columnas
+        // aunque se lea con scroll (zoom) sin ver el encabezado de la pagina
+        const colLabelRowH = 8;
+        const paintColLabels = (y) => {
+            pdf.setFillColor(30, 64, 175);
+            pdf.rect(marginLeft, y, usableWidth, colLabelRowH, 'F');
+            pdf.setTextColor(255, 255, 255);
+            pdf.setFontSize(7.5);
+            pdf.setFont('helvetica', 'bold');
+            let x = marginLeft;
+            pdf.text('Folio', x + colWidths.folio/2, y + 5, { align: 'center' }); x += colWidths.folio;
+            pdf.text('Fecha', x + colWidths.fecha/2, y + 5, { align: 'center' }); x += colWidths.fecha;
+            pdf.text('Título', x + colWidths.titulo/2, y + 5, { align: 'center' }); x += colWidths.titulo;
+            pdf.text('Hora Ini', x + colWidths.hIni/2, y + 5, { align: 'center' }); x += colWidths.hIni;
+            pdf.text('Hora Fin', x + colWidths.hFin/2, y + 5, { align: 'center' }); x += colWidths.hFin;
+            pdf.text('Tipo', x + colWidths.tipo/2, y + 5, { align: 'center' }); x += colWidths.tipo;
+            pdf.text('Ubicación', x + colWidths.ubica/2, y + 5, { align: 'center' }); x += colWidths.ubica;
+            pdf.text('Usuario', x + colWidths.usuario/2, y + 5, { align: 'center' }); x += colWidths.usuario;
+            pdf.text('Fotos', x + colWidths.fotos/2, y + 5, { align: 'center' });
+        };
 
         // Función para dibujar el encabezado en cada página
         const drawHeader = (pageNum) => {
@@ -7017,37 +7218,151 @@ async function downloadPDF() {
             pdf.setFontSize(8);
             pdf.setFont('helvetica', 'normal');
             pdf.text(`Usuario: ${currentUser?.email || 'Admin'} | Total: ${filteredEntries.length} entradas`, marginLeft + 5, marginTop + 18);
-            pdf.text(`Filtros: ${filtersText}`, marginLeft + 5, marginTop + 22);
+            drawRuns(`Filtros: ${stripInvisible(filtersText)}`, marginLeft + 5, marginTop + 22, 8);
             pdf.text(`Página ${pageNum}`, pageWidth - marginRight - 15, marginTop + 22);
             
             currentY = marginTop + headerHeight + 5;
-
-            // Dibujar cabecera de tabla
-            pdf.setFillColor(30, 64, 175);
-            pdf.rect(marginLeft, currentY, usableWidth, 8, 'F');
-            pdf.setTextColor(255, 255, 255);
-            pdf.setFontSize(6);
-            pdf.setFont('helvetica', 'bold');
-            
-            let x = marginLeft;
-            pdf.text('Folio', x + colWidths.folio/2, currentY + 5, { align: 'center' }); x += colWidths.folio;
-            pdf.text('Fecha', x + colWidths.fecha/2, currentY + 5, { align: 'center' }); x += colWidths.fecha;
-            pdf.text('Título', x + colWidths.titulo/2, currentY + 5, { align: 'center' }); x += colWidths.titulo;
-            pdf.text('Descripción', x + colWidths.desc/2, currentY + 5, { align: 'center' }); x += colWidths.desc;
-            pdf.text('Tipo', x + colWidths.tipo/2, currentY + 5, { align: 'center' }); x += colWidths.tipo;
-            pdf.text('Ubicación', x + colWidths.ubica/2, currentY + 5, { align: 'center' }); x += colWidths.ubica;
-            pdf.text('Usuario', x + colWidths.usuario/2, currentY + 5, { align: 'center' }); x += colWidths.usuario;
-            pdf.text('Comentarios', x + colWidths.coment/2, currentY + 5, { align: 'center' });
-            
-            currentY += 8;
+            // (sin fila de etiquetas aqui: cada entrada lleva la suya propia)
         };
 
         drawHeader(currentPage);
 
-        // Contenedor para renderizar filas individuales (Colocado fuera de la pantalla con opacidad completa para html2canvas)
-        const rowMeasure = document.createElement('div');
-        rowMeasure.style.cssText = `position: absolute; left: -9999px; top: -9999px; width: ${usableWidth}mm; font-family: Arial; font-size: 7px;`;
-        document.body.appendChild(rowMeasure);
+        // ================================================================
+        // ================================================================
+        // RENDERIZADO POR TEXTO (rapido + texto seleccionable/copiable)
+        // Fila A: columnas (Folio/Fecha/Titulo/Horas/Tipo/Ubicacion/Usuario/Fotos)
+        // Fila B: Descripcion a ANCHO COMPLETO con letra grande (10pt)
+        // Fila C: Comentarios a ANCHO COMPLETO
+        // ================================================================
+        const fs = 8;                // tipografia de la rejilla (pt)
+        const fsTitulo = 9;          // titulo en negrita (pt)
+        const fsDesc = 10;           // descripcion (pt) - letra grande, no se sale del cuadro
+        const fsComent = 8.5;        // comentarios (pt)
+        const lineH = 4.05;          // alto de linea rejilla/comentarios (mm)
+        const lineHDesc = 5.2;       // alto de linea descripcion (mm)
+        const pad = 1.3;             // padding interno de celda (mm)
+        const baseOff = 2.3;         // primera linea base (8-8.5pt)
+        const baseOffDesc = 2.9;     // primera linea base (10pt)
+        const colKeys = ['folio', 'fecha', 'titulo', 'hIni', 'hFin', 'tipo', 'ubica', 'usuario', 'fotos'];
+        const colX = {};
+        let accX = marginLeft;
+        colKeys.forEach(k => { colX[k] = accX; accX += colWidths[k]; });
+        const rowStartY = marginTop + 25 + 5; // filas empiezan en 45mm (la hoja no trae fila de etiquetas)
+        const maxRowH = (pageHeight - marginBottom) - rowStartY;
+
+        // Ajuste de lineas para textos con iconos/emoji: mide exactamente igual
+        // que drawRuns (el ancho del icono = el ancho de la imagen dibujada)
+        const wrapIcon = (clean, availW, size) => {
+            const out = [];
+            for (const para of clean.split('\n')) {
+                if (!para.trim()) { out.push(''); continue; }
+                const words = para.split(' ').filter(Boolean);
+                let line = '';
+                const cutLong = (word) => {
+                    let chunk = '';
+                    for (const ch of word) {
+                        const cand = chunk + ch;
+                        if (chunk && widthMixed(cand, size) > availW) { out.push(chunk); chunk = ch; }
+                        else chunk = cand;
+                    }
+                    return chunk;
+                };
+                for (const word of words) {
+                    const cand = line ? line + ' ' + word : word;
+                    if (widthMixed(cand, size) <= availW) { line = cand; continue; }
+                    if (line) { out.push(line); line = ''; }
+                    line = (widthMixed(word, size) > availW) ? cutLong(word) : word;
+                }
+                if (line) out.push(line);
+            }
+            return out.length ? out : [''];
+        };
+
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(fs);
+
+        // Envolver texto al ancho de una celda con la MISMA fuente con la que se dibuja
+        const wrap = (t, w, size, style, keepNL) => {
+            let clean = (t == null ? '' : String(t)).replace(/\r/g, '');
+            if (keepNL) clean = clean.replace(/[ \t]+/g, ' ');
+            else clean = clean.replace(/\s+/g, ' ');
+            clean = stripInvisible(clean);
+            if (!clean.trim()) return [''];
+            pdf.setFont('helvetica', style || 'normal');
+            pdf.setFontSize(size || fs);
+            const avail = Math.max(10, (w - 2 * pad) * 0.985 - 0.5);
+            let lines;
+            if (hasImageCh(clean)) {
+                lines = wrapIcon(clean, avail, size || fs);
+            } else {
+                const ls = pdf.splitTextToSize(clean, avail);
+                lines = (Array.isArray(ls) && ls.length) ? ls : [clean];
+            }
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(fs);
+            return lines;
+        };
+        const unescapeBasic = (s) => s
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'");
+
+        // -------- bloques de ancho completo (Descripcion / Comentarios) --------
+        const paintFullBlock = (items, y, h, lh, bg, baseOffLocal) => {
+            pdf.setLineWidth(0.18);
+            pdf.setDrawColor(147, 182, 235);
+            pdf.setFillColor(bg[0], bg[1], bg[2]);
+            pdf.rect(marginLeft, y, usableWidth, h, 'FD');
+            pdf.setTextColor(0, 0, 0);
+            let yy = y + pad + baseOffLocal;
+            for (const it of items) {
+                pdf.setFont('helvetica', it.style || 'normal');
+                pdf.setFontSize(it.size);
+                drawRuns(it.t, marginLeft + pad, yy, it.size);
+                yy += lh;
+            }
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(fs);
+        };
+
+        const drawFullBlock = (items, lh, bg, baseOffLocal) => {
+            const totalH = items.length * lh + 2 * pad;
+            const bottomLimit = pageHeight - marginBottom;
+            if (totalH <= maxRowH) {
+                if (currentY + totalH > bottomLimit) {
+                    pdf.addPage();
+                    currentPage++;
+                    drawHeader(currentPage);
+                }
+                paintFullBlock(items, currentY, totalH, lh, bg, baseOffLocal);
+                currentY += totalH;
+                return;
+            }
+            // bloque mas alto que una pagina: cortar por lineas
+            let off = 0;
+            while (true) {
+                const spaceLeft = bottomLimit - currentY;
+                if (spaceLeft < 10) {
+                    pdf.addPage();
+                    currentPage++;
+                    drawHeader(currentPage);
+                    continue;
+                }
+                const avail = Math.max(1, Math.floor((spaceLeft - 2 * pad) / lh));
+                const n = Math.min(items.length - off, avail);
+                if (n <= 0) break;
+                const segH = n * lh + 2 * pad;
+                paintFullBlock(items.slice(off, off + n), currentY, segH, lh, bg, baseOffLocal);
+                currentY += segH;
+                off += n;
+                if (off >= items.length) break;
+                pdf.addPage();
+                currentPage++;
+                drawHeader(currentPage);
+            }
+        };
 
         console.log('[PDF Debug] 7. Procesando filas individualmente en bucle...');
         let processedCount = 0;
@@ -7055,7 +7370,8 @@ async function downloadPDF() {
         for (const entry of filteredEntries) {
             processedCount++;
             console.log(`[PDF Debug] Procesando fila ${processedCount}/${filteredEntries.length} (Folio: ${entry.folio || '-'})...`);
-            
+
+            // ----- Fecha formateada -----
             let fecha = '-';
             try {
                 const rawFecha = entry.fecha_hora || entry.fecha;
@@ -7074,162 +7390,150 @@ async function downloadPDF() {
             } catch (fechaErr) {
                 console.warn('[PDF Debug] Error al formatear fecha de entrada:', entry.id, fechaErr);
             }
-            
-            // Obtener comentarios de nuestro mapa en memoria
+
+            // ----- Comentarios (texto plano, cada uno por su linea) -----
             let comentarios = 'Sin comentarios';
             const entryComments = commentsByEntry[entry.id];
-            
             if (entryComments && entryComments.length > 0) {
                 comentarios = entryComments.map(c => {
                     const authorEmail = profilesMap[c.user_id] || c.user_id || 'Usuario';
-                    const author = escapeHTML(authorEmail);
-                    const comentarioEscapado = escapeHTML(c.comentario || '');
-                    return `• [${author}] ${comentarioEscapado}`;
-                }).join('<br>');
+                    return `- [${authorEmail}] ${c.comentario || ''}`;
+                }).join('\n');
                 if (comentarios.length > 10000) comentarios = comentarios.substring(0, 10000) + '...';
             }
-            
+            comentarios = unescapeBasic(comentarios);
+
             const titulo = entry.titulo || '';
             const descripcion = entry.descripcion || '';
             const ubicacion = entry.ubicacion || '';
             const usuario = entry.profiles?.email || entry.user_id || 'Usuario desconocido';
+            const horaInicio = entry.hora_inicio || '';
+            const horaFinal = entry.hora_final || '';
 
-            // HTML de la fila para medir con escapar de variables y tamaños de fuente unificados
-            rowMeasure.innerHTML = `
-                <table style="width: 100%; border-collapse: collapse; table-layout: fixed;">
-                    <tr>
-                        <td style="width: 4%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(entry.folio || '-')}</td>
-                        <td style="width: 9%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(fecha)}</td>
-                        <td style="width: 12%; border: 0.1pt solid #bfdbfe; padding: 2px; font-weight: bold; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(titulo)}</td>
-                        <td id="desc-cell" style="width: 50%; border: 0.1pt solid #bfdbfe; padding: 3px; text-align: justify; vertical-align: top; background: #f8fafc; word-wrap: break-word; word-break: break-all;">${escapeHTML(descripcion)}</td>
-                        <td style="width: 5%; border: 0.1pt solid #bfdbfe; padding: 2px; text-align: center; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(entry.tipo_nota || '')}</td>
-                        <td style="width: 7%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(ubicacion)}</td>
-                        <td style="width: 6%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top; word-wrap: break-word; word-break: break-all;">${escapeHTML(usuario)}</td>
-                        <td style="width: 7%; border: 0.1pt solid #bfdbfe; padding: 2px; vertical-align: top; word-wrap: break-word; word-break: break-all;">${comentarios}</td>
-                    </tr>
-                </table>
-            `;
+            // ----- Fotos: miniaturas (hasta 10) + enlace a la galeria original -----
+            const archivosFila = Array.isArray(entry.archivos) ? entry.archivos : (Array.isArray(entry.fotos) ? entry.fotos : []);
+            const imagenesFila = archivosFila.filter(esImagenArchivo);
+            const thumbsFila = imagenesFila.slice(0, 10);
+            // Los PDFs siempre enlazan a produccion (aunque se generen en local)
+            const baseURL = (location.hostname === '127.0.0.1' || location.hostname === 'localhost')
+                ? 'https://bitacoradigital1509.com/'
+                : (location.origin + location.pathname);
+            const verFotosURL = (entry.id ? baseURL + '#ver-fotos=' + encodeURIComponent(entry.id) : '');
 
-            let canvas;
-            try {
-                // Implementar Timeout en html2canvas con Promise.race para evitar que se quede colgado eternamente
-                canvas = await Promise.race([
-                    html2canvas(rowMeasure, { 
-                        scale: 2, 
-                        useCORS: true, 
-                        logging: false,
-                        allowTaint: true
-                    }),
-                    new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout al renderizar html2canvas (3 segundos)')), 3000))
-                ]);
-            } catch (canvasErr) {
-                console.error(`[PDF Debug] Error/Timeout en html2canvas para folio ${entry.folio || '-'}:`, canvasErr);
+            // Descargar miniaturas en paralelo (cache dentro de makeThumbDataURL)
+            const thumbsData = await Promise.all(thumbsFila.map(a => {
+                const u = typeof a === 'string' ? a : (a.url || '');
+                return u ? makeThumbDataURL(u) : Promise.resolve('');
+            }));
+            const thumbsOK = thumbsData.filter(Boolean).length;
+
+            // ----- Fila A: columnas -----
+            const L = {};
+            L.folio   = wrap(entry.folio ?? String(processedCount), colWidths.folio, fs);
+            L.fecha   = wrap(fecha, colWidths.fecha, fs);
+            L.titulo  = wrap(titulo, colWidths.titulo, fsTitulo, 'bold');
+            L.hIni    = wrap(horaInicio, colWidths.hIni, fs);
+            L.hFin    = wrap(horaFinal, colWidths.hFin, fs);
+            L.tipo    = wrap(entry.tipo_nota || '', colWidths.tipo, fs);
+            L.ubica   = wrap(ubicacion, colWidths.ubica, fs);
+            L.usuario = wrap(usuario, colWidths.usuario, fs);
+
+            const thumb = 8, thumbGap = 0.6, gridCols = 3;
+            const gridRows = thumbsData.length > 0 ? Math.ceil(thumbsOK / gridCols) : 0;
+            const fotosHeight = gridRows > 0 ? 2 * pad + gridRows * (thumb + thumbGap) + 4.2 : 2 * pad + 4.2;
+
+            let stripH = 9;
+            colKeys.forEach(k => { if (k !== 'fotos') stripH = Math.max(stripH, L[k].length * lineH + 2 * pad); });
+            stripH = Math.max(stripH, fotosHeight);
+
+            // Fila A siempre completa en una pagina
+            const bottomLimit = pageHeight - marginBottom;
+            if (currentY + colLabelRowH + stripH > bottomLimit) {
+                pdf.addPage();
+                currentPage++;
+                drawHeader(currentPage);
             }
+            // Etiquetas de columna SOLO al inicio de cada entrada (la hoja ya
+            // no las trae, para que identifiquen a cada entrada y no se repitan)
+            paintColLabels(currentY);
+            currentY += colLabelRowH;
 
-            // Validación de canvas nulo o vacío
-            if (!canvas || canvas.width === 0 || canvas.height === 0) {
-                console.warn('[PDF Debug] Canvas inválido o vacío generado para la entrada:', entry.id);
-                // Creamos un canvas por defecto para que no rompa la generación
-                canvas = document.createElement('canvas');
-                canvas.width = 300;
-                canvas.height = 30;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#FFFFFF';
-                ctx.fillRect(0, 0, 300, 30);
-                ctx.fillStyle = '#FF0000';
-                ctx.font = '10px Arial';
-                ctx.fillText(`Error de renderizado visual (Folio ${entry.folio || '-'})`, 10, 20);
-            }
+            const zebra = (processedCount % 2 === 0);
+            const cellBg = zebra ? [248, 249, 250] : [255, 255, 255];
+            pdf.setLineWidth(0.18);
+            pdf.setDrawColor(147, 182, 235);
+            colKeys.forEach(k => {
+                pdf.setFillColor(cellBg[0], cellBg[1], cellBg[2]);
+                pdf.rect(colX[k], currentY, colWidths[k], stripH, 'FD');
+            });
 
-            // Evitar división por cero
-            const rowHeightMM = (canvas.width > 0) ? ((canvas.height * usableWidth) / canvas.width) : 10;
-
-            // ¿Cabe la fila entera en el espacio que queda de la hoja?
-            if (currentY + rowHeightMM > (pageHeight - marginBottom)) {
-                // Si la fila es más alta que una hoja entera o no cabe
-                let remainingRowHeight = rowHeightMM;
-                let canvasOffset = 0;
-                let loopCount = 0;
-
-                while (remainingRowHeight > 0) {
-                    loopCount++;
-                    if (loopCount > 50) {
-                        console.error('[PDF Debug] Bucle infinito evitado en división de página para fila:', entry.folio);
-                        break;
-                    }
-
-                    const spaceLeft = (pageHeight - marginBottom) - currentY;
-                    
-                    // Si el espacio que queda es muy pequeño, saltar página
-                    if (spaceLeft < 15 && canvasOffset === 0) {
-                        pdf.addPage();
-                        currentPage++;
-                        drawHeader(currentPage);
-                        continue;
-                    }
-
-                    // Cuánto de la fila podemos meter en esta página
-                    const heightToDraw = Math.min(remainingRowHeight, spaceLeft);
-                    
-                    if (heightToDraw <= 0) {
-                        pdf.addPage();
-                        currentPage++;
-                        drawHeader(currentPage);
-                        currentY = marginTop + 30;
-                        continue;
-                    }
-                    
-                    // Ratio para el corte del canvas
-                    const sourceY = (canvasOffset * canvas.height) / rowHeightMM;
-                    const sourceHeight = (heightToDraw * canvas.height) / rowHeightMM;
-
-                    // Crear un canvas temporal para el trozo
-                    const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = canvas.width;
-                    tempCanvas.height = Math.max(1, Math.floor(sourceHeight));
-                    const ctx = tempCanvas.getContext('2d');
-                    
-                    // Fondo blanco opaco
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-                    
-                    try {
-                        ctx.drawImage(
-                            canvas, 
-                            0, Math.floor(sourceY), canvas.width, Math.max(1, Math.floor(sourceHeight)), 
-                            0, 0, tempCanvas.width, tempCanvas.height
-                        );
-                    } catch (drawErr) {
-                        console.error('[PDF Debug] Error al dibujar segmento de canvas:', drawErr);
-                    }
-
-                    const imgData = tempCanvas.toDataURL('image/jpeg', 0.85);
-                    if (imgData && imgData.startsWith('data:image/')) {
-                        pdf.addImage(imgData, 'JPEG', marginLeft, currentY, usableWidth, heightToDraw);
-                    }
-
-                    remainingRowHeight -= heightToDraw;
-                    canvasOffset += heightToDraw;
-
-                    if (remainingRowHeight > 0) {
-                        pdf.addPage();
-                        currentPage++;
-                        drawHeader(currentPage);
+            pdf.setTextColor(0, 0, 0);
+            for (const k of colKeys) {
+                if (k === 'fotos') continue;
+                const cellLines = L[k];
+                const isBold = (k === 'titulo');
+                const cellSize = isBold ? fsTitulo : fs;
+                pdf.setFont('helvetica', isBold ? 'bold' : 'normal');
+                pdf.setFontSize(cellSize);
+                const cellBase = isBold ? 2.5 : baseOff;
+                for (let i = 0; i < cellLines.length; i++) {
+                    const ly = currentY + pad + cellBase + i * lineH;
+                    if (ly + 1.1 > currentY + stripH) break;
+                    if (k === 'folio' || k === 'fecha' || k === 'hIni' || k === 'hFin' || k === 'tipo') {
+                        drawRuns(cellLines[i], colX[k] + colWidths[k] / 2, ly, cellSize, 'center');
                     } else {
-                        currentY += heightToDraw;
+                        drawRuns(cellLines[i], colX[k] + pad, ly, cellSize);
                     }
+                }
+            }
+            pdf.setFont('helvetica', 'normal');
+            pdf.setFontSize(fs);
+
+            // Miniaturas + enlace en la celda de Fotos
+            if (gridRows > 0) {
+                let gi = 0;
+                const baseX = colX.fotos + pad;
+                const baseY = currentY + pad;
+                for (let gr = 0; gr < gridRows; gr++) {
+                    for (let gc = 0; gc < gridCols; gc++, gi++) {
+                        if (gi >= thumbsData.length) break;
+                        const d = thumbsData[gi];
+                        if (!d) continue;
+                        try { pdf.addImage(d, 'JPEG', baseX + gc * (thumb + thumbGap), baseY + gr * (thumb + thumbGap), thumb, thumb); } catch (imgErr) { }
+                    }
+                }
+                const labY = baseY + gridRows * (thumb + thumbGap);
+                if (verFotosURL) {
+                    pdf.setTextColor(29, 78, 216);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(fs);
+                    pdf.textWithLink(`Ver fotos (${thumbsOK})`, colX.fotos + pad, labY + 2.6, { url: verFotosURL });
+                    pdf.link(colX.fotos, currentY, colWidths.fotos, stripH, { url: verFotosURL });
+                    pdf.setFont('helvetica', 'normal');
                 }
             } else {
-                // Cabe perfectamente
-                const imgData = canvas.toDataURL('image/jpeg', 0.85);
-                if (imgData && imgData.startsWith('data:image/')) {
-                    pdf.addImage(imgData, 'JPEG', marginLeft, currentY, usableWidth, rowHeightMM);
-                }
-                currentY += rowHeightMM;
+                pdf.setTextColor(130, 130, 130);
+                pdf.setFont('helvetica', 'italic');
+                pdf.setFontSize(fs);
+                pdf.text('Sin fotos', colX.fotos + pad, currentY + pad + baseOff);
+                pdf.setFont('helvetica', 'normal');
             }
-        }
+            pdf.setTextColor(0, 0, 0);
+            currentY += stripH;
 
-        document.body.removeChild(rowMeasure);
+            // ----- Fila B: Descripcion a ancho completo (letra grande) -----
+            const descLines = wrap(descripcion, usableWidth, fsDesc, 'normal', false);
+            const descItems = [{ t: 'Descripción:', style: 'bold', size: fsDesc - 1.5 }]
+                .concat((descripcion ? descLines : ['(sin descripción)']).map(t => ({ t, style: 'normal', size: fsDesc })));
+            drawFullBlock(descItems, lineHDesc, [232, 242, 254], baseOffDesc);
+
+            // ----- Fila C: Comentarios a ancho completo -----
+            const comLines = wrap(comentarios, usableWidth, fsComent, 'normal', false);
+            const comItems = [{ t: 'Comentarios:', style: 'bold', size: fsComent - 1 }]
+                .concat(comLines.map(t => ({ t, style: 'normal', size: fsComent })));
+            drawFullBlock(comItems, lineH, zebra ? [248, 249, 250] : [255, 255, 255], baseOff);
+        }
+        // ================================================================
         console.log('[PDF Debug] 8. Procesamiento de filas finalizado. Guardando archivo...');
 
         // Generar nombre de archivo con fecha
@@ -7295,6 +7599,8 @@ async function downloadPDF() {
         console.error('[PDF Debug] Error crítico al generar PDF:', error);
         console.error('Detalles del error:', error.message, error.stack);
         showNotification('❌ Error al generar PDF: ' + (error.message || 'Error desconocido'), 'error');
+    } finally {
+        pdfGenerando = false; // liberar el guard pase lo que pase
     }
 }
 
@@ -7837,6 +8143,8 @@ if (detectPasswordRecovery()) {
 } else {
     checkAuth().then(() => {
         console.log('✅ checkAuth completado exitosamente');
+        // Reabrir la galería de fotos si el enlace del PDF quedó pendiente
+        resumePendingVerFotos();
         console.log('🔍 Verificando funciones globales:', {
             deleteEntry: typeof window.deleteEntry,
             diagnoseDeleteIssue: typeof window.diagnoseDeleteIssue

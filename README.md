@@ -306,6 +306,55 @@ PROYECTO BITACORA/
 - ✅ Validaciones de archivos
 - ✅ Políticas de storage controladas
 
+### Row Level Security (RLS)
+
+RLS habilitado en **todas** las tablas: `profiles`, `bitacora`, `bitacora_read`, `comentarios`,
+`notification_logs` e `invitation_codes`.
+
+- `profiles`: cada usuario lee perfiles; solo puede actualizar su **propio** perfil y únicamente
+  la columna `nombre` (el `rol` no se puede cambiar desde el cliente). El rol solo lo asigna el
+  canje de un código de invitación.
+- `notification_logs`: escritura controlada por políticas; sin acceso público.
+
+### Funciones RPC (SECURITY DEFINER)
+
+Las funciones `SECURITY DEFINER` se ejecutan con permisos elevados, por lo que **verifican los
+permisos internamente** y **no son ejecutables sin sesión (`anon`)**:
+
+| Función | Protección interna | Ejecutable por |
+|---|---|---|
+| `generate_invitation_code` | Requiere `is_admin()` | `authenticated` |
+| `delete_bitacora_entry` | Requiere `is_admin()` | `authenticated` |
+| `mark_unread_for_others` | Requiere `current_user_id = auth.uid()` | `authenticated` |
+| `redeem_invitation_code` | No permite cambiar el rol de un admin; si hay sesión, solo puede canjear para sí mismo | `authenticated` y `anon`¹ |
+| `delete_entry_cascade` | Sin uso en la app | *nadie* |
+| `force_delete_entry` | Sin uso en la app | *nadie* |
+
+¹ `redeem_invitation_code` se deja accesible a `anon` porque el registro puede llamarla antes de
+iniciar sesión (cuando la confirmación de correo está activada). Su seguridad recae en el control
+interno.
+
+Todas las funciones anteriores llevan `SET search_path = public` para evitar secuestro de
+`search_path`.
+
+### Revertir los permisos (si algún día hace falta)
+
+```sql
+-- Volver a permitir la ejecución a usuarios sin sesión (NO recomendado)
+grant execute on function public.generate_invitation_code(character varying, integer) to anon;
+grant execute on function public.delete_bitacora_entry(integer) to anon;
+grant execute on function public.mark_unread_for_others(integer, uuid) to anon;
+grant execute on function public.delete_entry_cascade(bigint) to anon;
+grant execute on function public.force_delete_entry(bigint) to anon;
+
+-- Volver a permitir la actualización libre del perfil (NO recomendado)
+grant update on public.profiles to authenticated;
+
+-- Deshabilitar RLS (NO recomendado)
+alter table public.profiles disable row level security;
+alter table public.notification_logs disable row level security;
+```
+
 ## 📱 Optimizaciones
 
 - ✅ Índice de búsqueda para búsquedas rápidas

@@ -1706,6 +1706,8 @@ async function handleBitacoraSubmit(e) {
 
         const form = document.getElementById('bitacoraForm');
         const editId = form.dataset.editId;
+        // Estado real de guardado: true solo si la entrada quedó guardada online (para decidir el envío de correo)
+        let guardadoEnLinea = isOnline;
         const keepPhotosCheckbox = document.getElementById('keepPhotosCheckbox');
 
         const fotoFiles = allSelectedFiles.length > 0 ? allSelectedFiles : document.getElementById('fotos').files;
@@ -2004,6 +2006,7 @@ async function handleBitacoraSubmit(e) {
                     currentlyOnline = false;
                     error = null; // Limpiar el error para que el modo offline funcione
                 } else if (!error && data) {
+                    guardadoEnLinea = true;
                     // Guardar en IndexedDB para soporte offline
                     await dbManager.saveEntry({
                         ...formData,
@@ -2021,6 +2024,7 @@ async function handleBitacoraSubmit(e) {
         }
 
         if (!currentlyOnline) {
+            guardadoEnLinea = false;
             // Guardar solo en IndexedDB (offline)
             console.log('🔴 ========== GUARDANDO ENTRADA OFFLINE ==========');
             console.log('🔴 currentUser:', currentUser);
@@ -2091,14 +2095,14 @@ async function handleBitacoraSubmit(e) {
 
             const condition1 = !editId;
             const condition2 = data && (Array.isArray(data) ? data[0] : data);
-            const condition3 = isOnline;
+            const condition3 = guardadoEnLinea;
 
             console.log('📧 Condición 1 (!editId):', condition1);
             console.log('📧 Condición 2 (data && entrada):', condition2);
             console.log('📧 Condición 3 (isOnline):', condition3);
             console.log('📧 TODAS las condiciones:', condition1 && condition2 && condition3);
 
-            if (!editId && data && isOnline) {
+            if (!editId && data && guardadoEnLinea) {
                 console.log('📧 ✅ CONDICIONES CUMPLIDAS - ENVIANDO NOTIFICACIONES...');
                 const entrada = Array.isArray(data) ? data[0] : data;
                 try {
@@ -2119,7 +2123,7 @@ async function handleBitacoraSubmit(e) {
             console.log('📧 ========== FIN DE LA SECCIÓN DE EMAILS ==========');
 
             // Notificar a otros usuarios (el realtime se encargará automáticamente)
-            const successMsg = isOnline ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)';
+            const successMsg = guardadoEnLinea ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)';
             showNotification(successMsg, 'success');
 
             document.getElementById('bitacoraForm').reset();
@@ -2135,7 +2139,7 @@ async function handleBitacoraSubmit(e) {
                     alert(isOnline ? '✅ Entrada actualizada exitosamente' : '📦 Entrada actualizada offline (se sincronizará cuando vuelva la conexión)');
                 }
             } else {
-                alert(isOnline ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)');
+                alert(guardadoEnLinea ? '✅ Entrada guardada exitosamente' : '📦 Entrada guardada offline (se sincronizará cuando vuelva la conexión)');
             }
         }
     } catch (error) {

@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const { entrada } = await req.json()
+    const { entrada, modo_prueba } = await req.json()
 
     if (!entrada) {
       return new Response(
@@ -81,11 +81,13 @@ Deno.serve(async (req) => {
     }
 
     // Initialize Supabase client
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
+  })
 
     // Get all active users
     console.log('Obteniendo usuarios de la tabla profiles...')
-    const { data: usuarios, error } = await supabaseClient
+    let { data: usuarios, error } = await supabaseClient
       .from('profiles')
       .select('email, nombre')
       .not('email', 'is', null)
@@ -96,6 +98,30 @@ Deno.serve(async (req) => {
     }
 
     console.log('Usuarios encontrados:', usuarios?.length || 0)
+
+    // Modo prueba: solo envía al correo del usuario que hace la llamada.
+    // Además informa cuántos perfiles se pueden leer con la clave anon y con la sesión del usuario (diagnóstico de RLS).
+    let diagnostico: any = undefined
+    if (modo_prueba === true) {
+      const clienteUsuario = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: req.headers.get('Authorization') || '' } }
+      })
+      const { data: { user } } = await clienteUsuario.auth.getUser()
+
+      if (!user?.email) {
+        return new Response(
+          JSON.stringify({ error: 'Modo prueba requiere una sesión válida' }),
+          { status: 401, headers: corsHeaders }
+        )
+      }
+
+      diagnostico = {
+        perfiles_leidos: usuarios?.length ?? 0,
+        destinatario_prueba: user.email
+      }
+      console.log('Modo prueba activo, destinatario:', user.email, diagnostico)
+      usuarios = [{ email: user.email, nombre: 'Prueba' }]
+    }
 
     if (!usuarios || usuarios.length === 0) {
       return new Response(
@@ -168,7 +194,8 @@ Deno.serve(async (req) => {
         message: 'Notificaciones enviadas: ' + exitos + ' exitosas, ' + errores + ' fallidas',
         exitos,
         errores,
-        resultados
+        resultados,
+        ...(diagnostico ? { diagnostico } : {})
       }),
       { headers: corsHeaders }
     )

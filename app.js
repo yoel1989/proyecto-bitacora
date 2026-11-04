@@ -7217,7 +7217,7 @@ async function downloadPDF() {
             pdf.setTextColor(255, 255, 255);
             pdf.setFontSize(14);
             pdf.setFont('helvetica', 'bold');
-            pdf.text('BITACORA DE OBRA - CONSORCIO TITAN', pageWidth / 2, marginTop + 10, { align: 'center' });
+            pdf.text('BITACORA DE OBRA - CONSORCIO MALLA VIAL 1509', pageWidth / 2, marginTop + 10, { align: 'center' });
             
             pdf.setFontSize(8);
             pdf.setFont('helvetica', 'normal');

@@ -281,7 +281,8 @@ async function syncOfflineQueue() {
 
         console.log('🔄 Iniciando sincronización...');
 
-        const queueItems = await dbManager.getQueueItems();
+        // Solo los pendientes: los ya sincronizados no deben reenviarse (evita duplicados)
+        const queueItems = (await dbManager.getQueueItems()).filter(item => !item.synced);
 
         if (queueItems.length === 0) {
             console.log('✅ Queue vacío, nada que sincronizar');
@@ -289,6 +290,9 @@ async function syncOfflineQueue() {
         }
 
         console.log(`🔄 Procesando ${queueItems.length} items del queue...`);
+
+        let okCount = 0;
+        let failCount = 0;
 
         for (const item of queueItems) {
             try {
@@ -303,13 +307,20 @@ async function syncOfflineQueue() {
                 }
 
                 await dbManager.markQueueItemAsSynced(item.id);
+                okCount++;
                 console.log(`✅ Item sincronizado: ${item.id}`);
             } catch (error) {
+                // El elemento se queda pendiente en la cola y se reintenta en la próxima sincronización
+                failCount++;
                 console.error(`❌ Error sincronizando item ${item.id}:`, error);
             }
         }
 
-        showNotification(`✅ ${queueItems.length} cambios sincronizados`, 'success', 3000);
+        if (failCount === 0) {
+            showNotification(`✅ ${okCount} cambios sincronizados`, 'success', 3000);
+        } else {
+            showNotification(`⚠️ ${okCount} sincronizados, ${failCount} con error (quedan pendientes)`, 'warning', 6000);
+        }
     } catch (error) {
         console.error('❌ Error en sincronización:', error);
     }

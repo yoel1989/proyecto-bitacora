@@ -2716,6 +2716,21 @@ async function loadMoreEntries() {
 let isRenderingEntries = false;
 
 // Mostrar entradas con renderizado optimizado
+// Modo con el que se dibujó la lista por última vez (true = tarjetas, false = tabla)
+let ultimoModoRenderMobile = null;
+let resizeRenderTimer = null;
+
+// Al cruzar el umbral de 768 px, redibujar la lista; si no, se queda el layout anterior
+window.addEventListener('resize', () => {
+    clearTimeout(resizeRenderTimer);
+    resizeRenderTimer = setTimeout(() => {
+        if (ultimoModoRenderMobile === null || !currentUser || allEntries.length === 0) return;
+        const esMobile = window.innerWidth <= 768;
+        if (esMobile === ultimoModoRenderMobile) return;
+        filterAndDisplayEntries();
+    }, 250);
+});
+
 async function displayEntries(entries, append = false) {
     const entriesList = document.getElementById('entriesList');
     if (!entriesList) return;
@@ -2776,6 +2791,7 @@ async function displayEntries(entries, append = false) {
     }));
     
     const isMobile = window.innerWidth <= 768;
+    ultimoModoRenderMobile = isMobile;
     const fragment = document.createDocumentFragment();
     
     if (isMobile) {

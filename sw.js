@@ -8,7 +8,7 @@
 //  - Combinado con skipWaiting + clients.claim() y el listener controllerchange de
 //    la página, cada nueva versión se aplica sola, SIN que el usuario limpie caché.
 
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `bitacora-cache-${CACHE_VERSION}`;
 const STATIC_CACHE = `bitacora-static-${CACHE_VERSION}`;
 

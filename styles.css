@@ -722,9 +722,13 @@ main {
 @media (max-width: 1200px) {
   .excel-table {
     font-size: 0.8rem;
-    overflow-x: auto;
-    display: block;
     max-width: 100%;
+  }
+
+  /* El scroll horizontal va en el contenedor, no en la tabla (display:block dejaba
+     el cuerpo con altura 0 por contain: strict y las entradas no se veían) */
+  .table-body-container {
+    overflow-x: auto;
   }
 
   .excel-table th,

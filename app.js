@@ -3822,6 +3822,9 @@ async function checkAuth() {
     // PASO 1: SIEMPRE intentar autenticación online primero
     console.log('🔍 Supabase client disponible:', !!supabaseClient);
 
+    // true solo si Supabase responde explícitamente "no hay sesión" (sin error ni timeout)
+    let noSessionConfirmed = false;
+
     if (supabaseClient) {
         try {
             console.log('🔍 Intentando autenticación online...');
@@ -3836,6 +3839,7 @@ async function checkAuth() {
             console.log('🔍 Resultado getSession:', result);
 
             const { data: { session }, error } = result;
+            noSessionConfirmed = !error && !session;
             console.log('🔍 Session:', session ? 'Existe' : 'No existe');
             console.log('🔍 Error:', error);
 
@@ -3899,6 +3903,18 @@ async function checkAuth() {
         } catch (onlineError) {
             console.warn('⚠️ Error en autenticación online:', onlineError.message);
         }
+    }
+
+    // PASO 1b: hay red y Supabase confirma que no hay sesión válida (p. ej. venció el token).
+    // Pedir login en vez de entrar en modo offline con la sesión guardada: el modo offline
+    // es solo para cuando realmente no hay conexión.
+    if (noSessionConfirmed && await checkRealConnectivity()) {
+        console.log('🔍 Hay conexión pero no hay sesión de Supabase - mostrando login');
+        offlineMode = false;
+        isOnline = true;
+        document.body.classList.remove('offline-mode');
+        showLogin();
+        return;
     }
 
     // PASO 2: Si no hay sesión online, usar sesión guardada (modo offline)

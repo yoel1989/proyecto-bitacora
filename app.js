@@ -25,7 +25,12 @@ if ('serviceWorker' in navigator) {
 
     // Cuando un Service Worker nuevo toma el control hay una versión nueva:
     // mostrar el aviso para que el usuario recargue.
+    // Solo avisar si ya había un Service Worker controlando esta página (es decir, hay
+    // una versión anterior abierta). En la primera instalación no hay nada que actualizar.
+    const hadController = !!navigator.serviceWorker.controller;
+
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!hadController) return;
         console.log('🔄 Nueva versión detectada: avisando al usuario...');
         showUpdateBanner();
     });
@@ -38,6 +43,7 @@ if ('serviceWorker' in navigator) {
 
                 // Respaldo: escuchar aviso directo del Service Worker
                 navigator.serviceWorker.addEventListener('message', (event) => {
+                    if (!hadController) return;
                     if (event.data && event.data.type === 'APP_UPDATE_AVAILABLE') {
                         console.log('🔄 Aviso del SW: nueva versión disponible');
                         showUpdateBanner();
@@ -170,55 +176,57 @@ window.addEventListener('offline', async () => {
 });
 
 // Función para verificar conectividad real con ping
+// Endpoints para comprobar conectividad. Primero el backend real de la app (Supabase):
+// si responde cualquier HTTP (aunque sea 401), hay red. Luego respaldos públicos.
+// Con mode 'no-cors' la respuesta es opaca: solo importa si la red falla o no.
+function getConnectivityProbes() {
+    const probes = [];
+    if (typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) {
+        probes.push(SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/health');
+    }
+    probes.push('https://www.google.com/favicon.ico');
+    probes.push('https://httpbin.org/status/200');
+    return probes;
+}
+
 async function checkRealConnectivity() {
-    try {
-        console.log('🌐 Verificando conectividad real...');
+    // Si el navegador dice que no hay interfaz de red, no hace falta probar
+    if (navigator.onLine === false) {
+        console.log('❌ navigator.onLine=false - sin conexión');
+        return false;
+    }
 
-        // Intentar hacer un fetch rápido a un endpoint confiable
+    console.log('🌐 Verificando conectividad real...');
+
+    for (const url of getConnectivityProbes()) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Timeout más largo: 5 segundos
-
-        const response = await fetch('https://httpbin.org/status/200', {
-            method: 'HEAD',
-            mode: 'no-cors',
-            cache: 'no-cache',
-            signal: controller.signal
-        });
-
-        clearTimeout(timeoutId);
-        console.log('✅ Ping exitoso - conexión real disponible');
-        return true;
-    } catch (error) {
-        console.log('❌ Ping falló - sin conexión real:', error.message);
-
-        // Verificación adicional: intentar con un endpoint diferente
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
         try {
-            console.log('🌐 Intentando verificación secundaria...');
-            const controller2 = new AbortController();
-            const timeoutId2 = setTimeout(() => controller2.abort(), 3000);
-
-            await fetch('https://www.google.com/favicon.ico', {
-                method: 'HEAD',
+            await fetch(url, {
+                method: 'GET',
                 mode: 'no-cors',
-                cache: 'no-cache',
-                signal: controller2.signal
+                cache: 'no-store',
+                signal: controller.signal
             });
-
-            clearTimeout(timeoutId2);
-            console.log('✅ Verificación secundaria exitosa');
+            console.log('✅ Ping exitoso - conexión real disponible:', url);
             return true;
-        } catch (error2) {
-            console.log('❌ Verificación secundaria también falló:', error2.message);
-            return false;
+        } catch (error) {
+            console.log('❌ Ping falló:', url, error.message);
+        } finally {
+            clearTimeout(timeoutId);
         }
     }
+
+    return false;
 }
 
 // Check periódico de conectividad REAL (cada 30 segundos - más razonable)
 console.log('🌐 Iniciando check periódico de conectividad (cada 30 segundos)');
 setInterval(async () => {
     try {
-        const wasOnline = isOnline;
+        // Estado efectivo: offline si isOnline=false u offlineMode=true (pueden quedar desincronizados
+        // por ejemplo cuando checkAuth cae a sesión guardada tras un timeout)
+        const wasOnline = isOnline && !offlineMode;
         const realOnline = await checkRealConnectivity();
 
         // Log solo cuando hay cambio o cada 10 checks

@@ -8,7 +8,7 @@
 //  - Combinado con skipWaiting + clients.claim() y el listener controllerchange de
 //    la página, cada nueva versión se aplica sola, SIN que el usuario limpie caché.
 
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `bitacora-cache-${CACHE_VERSION}`;
 const STATIC_CACHE = `bitacora-static-${CACHE_VERSION}`;
 
@@ -30,28 +30,24 @@ const STATIC_ASSETS = [
 // Instalar Service Worker
 self.addEventListener('install', (event) => {
     console.log('🔧 Service Worker instalándose...');
+    // Precarga tolerante: si un CDN falla, NO se aborta la instalación (antes, un
+    // addAll fallido impedía el skipWaiting y la versión nueva quedaba esperando).
     event.waitUntil(
         caches.open(STATIC_CACHE)
-            .then((cache) => {
-                console.log('🔧 Cacheando recursos estáticos...');
-                return cache.addAll(STATIC_ASSETS);
-            })
-            // Limpiar entradas con query strings (versiones viejas de app.js?v=... etc.)
-            .then(() => caches.open(STATIC_CACHE))
-            .then((cache) => cache.keys().then((keys) =>
-                Promise.all(keys.map((req) => {
-                    const url = new URL(req.url);
-                    if (url.origin === self.location.origin && url.search) {
-                        return cache.delete(req);
-                    }
-                }))
+            .then((cache) => Promise.allSettled(
+                STATIC_ASSETS.map((asset) =>
+                    fetch(asset, { cache: 'no-cache' })
+                        .then((response) => {
+                            if (response.ok || response.type === 'opaque') {
+                                return cache.put(asset, response);
+                            }
+                        })
+                        .catch((error) => console.warn('⚠️ No se precacheó:', asset, error && error.message))
+                )
             ))
             .then(() => {
                 console.log('✅ Service Worker instalado');
                 return self.skipWaiting();
-            })
-            .catch((error) => {
-                console.error('❌ Error instalando Service Worker:', error);
             })
     );
 });

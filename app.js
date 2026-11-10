@@ -2124,13 +2124,12 @@ async function handleBitacoraSubmit(e) {
             if (!editId && data && guardadoEnLinea) {
                 console.log('📧 ✅ CONDICIONES CUMPLIDAS - ENVIANDO NOTIFICACIONES...');
                 const entrada = Array.isArray(data) ? data[0] : data;
-                try {
-                    await enviarNotificacionesEmailATodos(entrada);
-                    console.log('📧 ✅ Notificaciones por email enviadas exitosamente');
-                } catch (emailError) {
-                    console.error('❌ Error enviando emails:', emailError);
-                    // No fallar el guardado si hay error en emails
-                }
+                // No esperar el envío de correos: la función tarda (envía uno por usuario con
+                // pausa de 600 ms) y bloqueaba el refresco de la tabla. Un error de correo no
+                // debe afectar el guardado.
+                enviarNotificacionesEmailATodos(entrada)
+                    .then(() => console.log('📧 ✅ Notificaciones por email enviadas exitosamente'))
+                    .catch(emailError => console.error('❌ Error enviando emails:', emailError));
             } else {
                 console.log('📧 ❌ CONDICIONES NO CUMPLIDAS - NO SE ENVIAN EMAILS');
                 console.log('📧 Razón del fallo:');
